@@ -134,9 +134,16 @@ void SoftwareRenderer::resetFormatIfChanged(
             case OMX_COLOR_FormatYUV420SemiPlanar:
             case OMX_TI_COLOR_FormatYUV420PackedSemiPlanar:
             {
-                halFormat = HAL_PIXEL_FORMAT_YV12;
-                bufWidth = (mCropWidth + 1) & ~1;
-                bufHeight = (mCropHeight + 1) & ~1;
+                char property[PROPERTY_VALUE_MAX];
+                bool isMesa = false;
+                if (property_get("ro.hardware.egl", property, "default") > 0)
+                    if (strcmp(property, "mesa") == 0)
+                        isMesa = true;
+                if (!isMesa) {
+                    halFormat = HAL_PIXEL_FORMAT_YV12;
+                    bufWidth = (mCropWidth + 1) & ~1;
+                    bufHeight = (mCropHeight + 1) & ~1;
+                }
                 break;
             }
             case OMX_COLOR_Format24bitRGB888:
