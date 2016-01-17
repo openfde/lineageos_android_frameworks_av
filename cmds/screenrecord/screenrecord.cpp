@@ -33,6 +33,7 @@
 #define LOG_TAG "ScreenRecord"
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
 //#define LOG_NDEBUG 0
+#include <cutils/properties.h>
 #include <utils/Log.h>
 
 #include <binder/IPCThreadState.h>
@@ -188,12 +189,17 @@ static status_t prepareEncoder(float displayFps, sp<MediaCodec>* pCodec,
                 gVideoWidth, gVideoHeight, kMimeTypeAvc, gBitRate / 1000000.0);
         fflush(stdout);
     }
+    char property[PROPERTY_VALUE_MAX];
+    bool isMesa = false;
+    if (property_get("ro.hardware.egl", property, "default") > 0)
+        if (strcmp(property, "mesa") == 0)
+            isMesa = true;
 
     sp<AMessage> format = new AMessage;
     format->setInt32(KEY_WIDTH, gVideoWidth);
     format->setInt32(KEY_HEIGHT, gVideoHeight);
     format->setString(KEY_MIME, kMimeTypeAvc);
-    format->setInt32(KEY_COLOR_FORMAT, OMX_COLOR_FormatAndroidOpaque);
+    format->setInt32(KEY_COLOR_FORMAT, isMesa ? OMX_COLOR_FormatYUV420Planar : OMX_COLOR_FormatAndroidOpaque);
     format->setInt32(KEY_BIT_RATE, gBitRate);
     format->setFloat(KEY_FRAME_RATE, displayFps);
     format->setInt32(KEY_I_FRAME_INTERVAL, 10);

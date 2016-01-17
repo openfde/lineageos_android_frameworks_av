@@ -18,6 +18,7 @@
 
 //#define LOG_NDEBUG 0
 #define LOG_TAG "SoftVideoEncoderOMXComponent"
+#include <cutils/properties.h>
 #include <utils/Log.h>
 #include <utils/misc.h>
 
@@ -397,8 +398,15 @@ OMX_ERRORTYPE SoftVideoEncoderOMXComponent::internalGetParameter(
             // XXX: For now just configure input and output buffers the same size.
             // May want to determine a more suitable output buffer size independent
             // of YUV format.
-            CHECK(mColorFormat == OMX_COLOR_FormatYUV420Planar ||
-                    mColorFormat == OMX_COLOR_FormatYUV420SemiPlanar);
+            char property[PROPERTY_VALUE_MAX];
+            bool isMesa = false;
+            if (property_get("ro.hardware.egl", property, "default") > 0)
+                if (strcmp(property, "mesa") == 0)
+                    isMesa = true;
+            if (!isMesa) {
+                CHECK(mColorFormat == OMX_COLOR_FormatYUV420Planar ||
+                        mColorFormat == OMX_COLOR_FormatYUV420SemiPlanar);
+            }
             def->nBufferSize = mWidth * mHeight * 3 / 2;
 
             return OMX_ErrorNone;
