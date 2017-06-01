@@ -17,6 +17,7 @@
 //#define LOG_NDEBUG 0
 #define LOG_TAG "ColorConverter"
 #include <android-base/macros.h>
+#include <cutils/properties.h>
 #include <utils/Log.h>
 
 #include <media/stagefright/foundation/ADebug.h>
@@ -348,9 +349,19 @@ status_t ColorConverter::convertYUV420PlanarUseLibYUV(
     switch (mDstFormat) {
     case OMX_COLOR_Format16bitRGB565:
     {
-        DECLARE_YUV2RGBFUNC(func, RGB565);
-        (*func)(src_y, src.mStride, src_u, src.mStride / 2, src_v, src.mStride / 2,
-                (uint8_t *)dst_ptr, dst.mStride, src.cropWidth(), src.cropHeight());
+        char property[PROPERTY_VALUE_MAX];
+        bool isMesa = false;
+        if (property_get("ro.hardware.egl", property, "default") > 0)
+            if (strcmp(property, "mesa") == 0)
+                isMesa = true;
+        if (isMesa) {
+            libyuv::I420ToRGB565Dither(src_y, src.mStride, src_u, src.mStride / 2, src_v, src.mStride / 2,
+                    (uint8_t *)dst_ptr, dst.mStride, NULL, src.cropWidth(), src.cropHeight());
+        } else {
+            DECLARE_YUV2RGBFUNC(func, RGB565);
+            (*func)(src_y, src.mStride, src_u, src.mStride / 2, src_v, src.mStride / 2,
+                    (uint8_t *)dst_ptr, dst.mStride, src.cropWidth(), src.cropHeight());
+        }
         break;
     }
 
