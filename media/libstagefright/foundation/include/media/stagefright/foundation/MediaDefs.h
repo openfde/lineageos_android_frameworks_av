@@ -134,6 +134,8 @@ enum AudioEncoding {
     kAudioEncodingPcm16bit = 2,
     kAudioEncodingPcm8bit = 3,
     kAudioEncodingPcmFloat = 4,
+    kAudioEncodingPcm24bitPacked = 21,
+    kAudioEncodingPcm32bit = 22,
 };
 
 static inline AudioEncoding bitsToAudioEncoding(int32_t bits) {
