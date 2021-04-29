@@ -117,7 +117,7 @@ cc_library_static {
     min_sdk_version: "29",
 
     srcs: [
-        "FFMPEGSoftCodec.cpp",
+        "FFMPEGUtil.cpp",
         "Utils.cpp",
         "MediaSource.cpp",
         "HevcUtils.cpp",
@@ -125,9 +125,6 @@ cc_library_static {
 
     shared_libs: [
         "liblog",
-        "libstagefright_omx_utils",
-        "android.hidl.allocator@1.0",
-        "android.hidl.memory@1.0",
     ],
 
     export_include_dirs: [
@@ -226,6 +223,7 @@ cc_library {
         "CameraSourceTimeLapse.cpp",
         "DataConverter.cpp",
         "FFMPEGSoftCodec.cpp",
+        "FFMPEGUtil.cpp",
         "FrameDecoder.cpp",
         "HevcUtils.cpp",
         "InterfaceUtils.cpp",

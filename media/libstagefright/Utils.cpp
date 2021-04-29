@@ -47,7 +47,7 @@
 #include <media/AudioParameter.h>
 #include <system/audio.h>
 
-#include <media/stagefright/FFMPEGSoftCodec.h>
+#include <media/stagefright/FFMPEGUtil.h>
 
 namespace android {
 
@@ -1495,7 +1495,7 @@ status_t convertMetaDataToMessage(
         parseDolbyVisionProfileLevelFromDvcc(ptr, size, msg);
     }
 
-    FFMPEGSoftCodec::convertMetaDataToMessageFF(meta, &msg);
+    FFMPEGUtil::convertMetaDataToMessageFF(meta, &msg);
     *format = msg;
 
 #if 0
@@ -2020,7 +2020,7 @@ status_t convertMessageToMetaData(const sp<AMessage> &msg, sp<MetaData> &meta) {
     }
     // XXX TODO add whatever other keys there are
 
-    FFMPEGSoftCodec::convertMessageToMetaDataFF(msg, meta);
+    FFMPEGUtil::convertMessageToMetaDataFF(msg, meta);
 
 #if 0
     ALOGI("convertMessageToMetaData from %s to:", msg->debugString(0).c_str());
