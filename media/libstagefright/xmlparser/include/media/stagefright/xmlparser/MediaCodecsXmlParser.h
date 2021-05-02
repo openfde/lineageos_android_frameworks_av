@@ -37,6 +37,8 @@ public:
     // /vendor/etc.
     static std::vector<std::string> getDefaultSearchDirs() {
         return { "/product/etc",
+                 "/odm_extra/etc",
+                 "/vendor_extra/etc",
                  "/odm/etc",
                  "/vendor/etc",
                  "/system/etc" };
