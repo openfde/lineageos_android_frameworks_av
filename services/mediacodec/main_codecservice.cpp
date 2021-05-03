@@ -34,7 +34,7 @@ using namespace android;
 static const char kSystemSeccompPolicyPath[] =
         "/system/etc/seccomp_policy/mediacodec.policy";
 static const char kVendorSeccompPolicyPath[] =
-        "/vendor/etc/seccomp_policy/mediacodec.policy";
+        "/vendor_extra/etc/seccomp_policy/mediacodec.policy";
 
 int main(int argc __unused, char** argv)
 {
