@@ -29,7 +29,7 @@
 #include <future>
 #include <inttypes.h>
 #include <hardware/camera_common.h>
-#include <android/hidl/manager/1.2/IServiceManager.h>
+#include <android/hidl/manager/1.1/IServiceManager.h>
 #include <hidl/ServiceManagement.h>
 #include <functional>
 #include <camera_metadata_hidden.h>
@@ -66,12 +66,21 @@ CameraProviderManager::~CameraProviderManager() {
 hardware::hidl_vec<hardware::hidl_string>
 CameraProviderManager::HardwareServiceInteractionProxy::listServices() {
     hardware::hidl_vec<hardware::hidl_string> ret;
-    auto manager = hardware::defaultServiceManager1_2();
-    if (manager != nullptr) {
-        manager->listManifestByInterface(provider::V2_4::ICameraProvider::descriptor,
+    auto manager = hardware::defaultServiceManager1_1();
+    auto manager_host = hardware::defaultServiceManager1_1(true);
+    if (manager_host != nullptr) {
+        manager_host->listByInterface(provider::V2_4::ICameraProvider::descriptor,
                 [&ret](const hardware::hidl_vec<hardware::hidl_string> &registered) {
                     ret = registered;
                 });
+    }
+    if (ret.size() == 0) {
+        if (manager != nullptr) {
+            manager->listByInterface(provider::V2_4::ICameraProvider::descriptor,
+                    [&ret](const hardware::hidl_vec<hardware::hidl_string> &registered) {
+                        ret = registered;
+                    });
+        }
     }
     return ret;
 }
