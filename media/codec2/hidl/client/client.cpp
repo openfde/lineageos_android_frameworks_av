@@ -29,7 +29,7 @@
 #include <android/hardware/media/c2/1.0/IComponentListener.h>
 #include <android/hardware/media/c2/1.0/IComponentStore.h>
 #include <android/hardware/media/c2/1.0/IConfigurable.h>
-#include <android/hidl/manager/1.2/IServiceManager.h>
+#include <android/hidl/manager/1.1/IServiceManager.h>
 
 #include <android-base/properties.h>
 #include <bufferpool/ClientManager.h>
@@ -42,6 +42,7 @@
 #include <gui/bufferqueue/2.0/B2HGraphicBufferProducer.h>
 #include <gui/bufferqueue/2.0/H2BGraphicBufferProducer.h>
 #include <hidl/HidlSupport.h>
+#include <hidl/ServiceManagement.h>
 
 #include <deque>
 #include <iterator>
@@ -858,10 +859,10 @@ std::shared_ptr<C2ParamReflector>
 std::vector<std::string> const& Codec2Client::GetServiceNames() {
     static std::vector<std::string> sServiceNames{[]() {
         using ::android::hardware::media::c2::V1_0::IComponentStore;
-        using ::android::hidl::manager::V1_2::IServiceManager;
 
         while (true) {
-            sp<IServiceManager> serviceManager = IServiceManager::getService();
+            auto serviceManager = hardware::defaultServiceManager1_1();
+            auto serviceManager_host = hardware::defaultServiceManager1_1(true);
             CHECK(serviceManager) << "Hardware service manager is not running.";
 
             // There are three categories of services based on names.
@@ -869,7 +870,24 @@ std::vector<std::string> const& Codec2Client::GetServiceNames() {
             std::vector<std::string> vendorNames;  // Prefixed with "vendor"
             std::vector<std::string> otherNames;   // Others
             Return<void> transResult;
-            transResult = serviceManager->listManifestByInterface(
+            if (serviceManager_host != NULL) {
+                transResult = serviceManager_host->listByInterface(
+                    IComponentStore::descriptor,
+                    [&defaultNames, &vendorNames, &otherNames](
+                            hidl_vec<hidl_string> const& instanceNames) {
+                        for (hidl_string const& instanceName : instanceNames) {
+                            char const* name = instanceName.c_str();
+                            if (strncmp(name, "default", 7) == 0) {
+                                defaultNames.emplace_back(name);
+                            } else if (strncmp(name, "vendor", 6) == 0) {
+                                vendorNames.emplace_back(name);
+                            } else {
+                                otherNames.emplace_back(name);
+                            }
+                        }
+                    });
+            }
+            transResult = serviceManager->listByInterface(
                     IComponentStore::descriptor,
                     [&defaultNames, &vendorNames, &otherNames](
                             hidl_vec<hidl_string> const& instanceNames) {
