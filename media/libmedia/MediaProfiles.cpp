@@ -42,8 +42,10 @@ std::array<char const*, 5> const& getXmlPaths() {
     static std::array<std::string const, 5> const paths =
         []() -> decltype(paths) {
             // Directories for XML file that will be searched (in this order).
-            constexpr std::array<char const*, 4> searchDirs = {
+            constexpr std::array<char const*, 6> searchDirs = {
                 "product/etc/",
+                "odm_extra/etc/",
+                "vendor_extra/etc/",
                 "odm/etc/",
                 "vendor/etc/",
                 "system/etc/",
