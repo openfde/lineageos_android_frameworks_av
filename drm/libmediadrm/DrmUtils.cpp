@@ -27,8 +27,10 @@
 #include <android/hardware/drm/1.2/IDrmFactory.h>
 #include <android/hardware/drm/1.3/ICryptoFactory.h>
 #include <android/hardware/drm/1.3/IDrmFactory.h>
+#include <android/hidl/manager/1.1/IServiceManager.h>
 #include <android/hidl/manager/1.2/IServiceManager.h>
 #include <hidl/HidlSupport.h>
+#include <hidl/ServiceManagement.h>
 
 #include <utils/Errors.h>
 #include <utils/Log.h>
@@ -70,6 +72,22 @@ void MakeHidlFactories(const uint8_t uuid[16], V &factories) {
     if (serviceManager == nullptr) {
         ALOGE("Failed to get service manager");
         exit(-1);
+    }
+
+    // Waydroid: check host_hwbinder services
+    auto serviceManager_host = hardware::defaultServiceManager1_1(true);
+    if (serviceManager_host != nullptr) {
+        serviceManager_host->listByInterface(Hal::descriptor, [&](const hidl_vec<hidl_string> &registered) {
+            for (const auto &instance : registered) {
+                auto factory = Hal::getService(instance);
+                if (factory != nullptr) {
+                    ALOGI("found %s %s", Hal::descriptor, instance.c_str());
+                    if (!uuid || factory->isCryptoSchemeSupported(uuid)) {
+                        factories.push_back(factory);
+                    }
+                }
+            }
+        });
     }
 
     serviceManager->listManifestByInterface(Hal::descriptor, [&](const hidl_vec<hidl_string> &registered) {
