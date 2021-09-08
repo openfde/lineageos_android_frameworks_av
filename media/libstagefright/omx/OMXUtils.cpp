@@ -173,6 +173,7 @@ const char *GetComponentRole(bool isEncoder, const char *mime) {
         { MEDIA_MIMETYPE_IMAGE_ANDROID_HEIC,
             "image_decoder.heic", "image_encoder.heic" },
 
+#if defined(__i386__)
         // FFMPEG extensions
         { MEDIA_MIMETYPE_AUDIO_AAC,
             "audio_decoder.aac", NULL },
@@ -216,6 +217,7 @@ const char *GetComponentRole(bool isEncoder, const char *mime) {
             "audio_decoder.trial", NULL },
         { MEDIA_MIMETYPE_VIDEO_FFMPEG,
             "video_decoder.trial", NULL },
+#endif
     };
 
     static const size_t kNumMimeToRole =
