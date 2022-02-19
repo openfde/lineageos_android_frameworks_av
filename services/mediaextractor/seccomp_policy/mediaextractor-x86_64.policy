@@ -37,6 +37,9 @@ getrandom: 1
 timer_create: 1
 timer_settime: 1
 timer_delete: 1
+memfd_create: 1
+ftruncate: 1
+fcntl: 1
 
 # for dynamically loading extractors
 getdents64: 1

@@ -44,6 +44,11 @@ getrandom: 1
 timer_create: 1
 timer_settime: 1
 timer_delete: 1
+memfd_create: 1
+ftruncate: 1
+ftruncate64: 1
+fcntl: 1
+fcntl64: 1
 
 # for dynamically loading extractors
 pread64: 1
