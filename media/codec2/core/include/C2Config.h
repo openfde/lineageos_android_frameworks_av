@@ -249,6 +249,8 @@ enum C2ParamIndexKind : C2Param::type_index_t {
 
     // low latency mode
     kParamIndexLowLatencyMode, // bool
+    // FFMPEG
+    kParamIndexRawCodecData,
 };
 
 }
@@ -2181,6 +2183,11 @@ inline C2TimestampGapAdjustmentStruct::C2TimestampGapAdjustmentStruct()
 
 typedef C2PortParam<C2Tuning, C2TimestampGapAdjustmentStruct> C2PortTimestampGapTuning;
 constexpr char C2_PARAMKEY_INPUT_SURFACE_TIMESTAMP_ADJUSTMENT[] = "input-surface.timestamp-adjustment";
+
+// FFMEG
+
+typedef C2StreamParam<C2Info, C2BlobValue, kParamIndexRawCodecData> C2StreamRawCodecDataInfo;
+constexpr char C2_PARAMKEY_RAW_CODEC_DATA[] = "coded.raw-codec-data";
 
 /// @}
 

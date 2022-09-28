@@ -789,6 +789,7 @@ static std::vector<std::pair<const char *, uint32_t>> bufferMappings {
         { "text-format-data", kKeyTextFormatData },
         { "thumbnail-csd-hevc", kKeyThumbnailHVCC },
         // FFMEG
+        { "raw-codec-data", kKeyRawCodecData },
         { "raw-codec-specific-data", kKeyRawCodecSpecificData },
     }
 };
