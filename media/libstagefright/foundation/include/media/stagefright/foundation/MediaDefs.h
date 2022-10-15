@@ -158,6 +158,9 @@ static inline int32_t audioEncodingToBits(AudioEncoding encoding) {
             return 8;
         case kAudioEncodingPcm16bit:
             return 16;
+        case kAudioEncodingPcm24bitPacked:
+            return 24;
+        case kAudioEncodingPcm32bit:
         case kAudioEncodingPcmFloat:
             return 32;
     }
