@@ -59,6 +59,8 @@ getdents64: 1
 getrandom: 1
 uname: 1
 sched_getaffinity: 1
+kcmp: 1
+sysinfo: 1
 
 @include /system/etc/seccomp_policy/crash_dump.arm.policy
 
