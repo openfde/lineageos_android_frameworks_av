@@ -400,14 +400,18 @@ OMX_ERRORTYPE SoftVideoEncoderOMXComponent::internalGetParameter(
             // of YUV format.
             char property[PROPERTY_VALUE_MAX];
             bool isMesa = false;
-            if (property_get("ro.hardware.egl", property, "default") > 0)
+            bool isPowervr = false;
+            if (property_get("ro.hardware.egl", property, "default") > 0){
                 if (strcmp(property, "mesa") == 0)
                     isMesa = true;
+                if (strcmp(property, "powervr") == 0)
+                    isPowervr = true;
+            }
             ALOGE("fde mColorFormat: %x", mColorFormat);
-            /*if (!isMesa) {
+            if (!isMesa && !isPowervr) {
                 CHECK(mColorFormat == OMX_COLOR_FormatYUV420Planar ||
                         mColorFormat == OMX_COLOR_FormatYUV420SemiPlanar);
-            }*/
+            }
             def->nBufferSize = mWidth * mHeight * 3 / 2;
 
             return OMX_ErrorNone;
