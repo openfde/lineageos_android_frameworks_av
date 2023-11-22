@@ -403,10 +403,11 @@ OMX_ERRORTYPE SoftVideoEncoderOMXComponent::internalGetParameter(
             if (property_get("ro.hardware.egl", property, "default") > 0)
                 if (strcmp(property, "mesa") == 0)
                     isMesa = true;
-            if (!isMesa) {
+            ALOGE("fde mColorFormat: %x", mColorFormat);
+            /*if (!isMesa) {
                 CHECK(mColorFormat == OMX_COLOR_FormatYUV420Planar ||
                         mColorFormat == OMX_COLOR_FormatYUV420SemiPlanar);
-            }
+            }*/
             def->nBufferSize = mWidth * mHeight * 3 / 2;
 
             return OMX_ErrorNone;
