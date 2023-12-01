@@ -16,7 +16,7 @@
 
 #include <inttypes.h>
 
-//#define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 #define LOG_TAG "SoftVideoEncoderOMXComponent"
 #include <cutils/properties.h>
 #include <utils/Log.h>
@@ -79,6 +79,11 @@ SoftVideoEncoderOMXComponent::SoftVideoEncoderOMXComponent(
       mCodingType(codingType),
       mProfileLevels(profileLevels),
       mNumProfileLevels(numProfileLevels) {
+    char property[PROPERTY_VALUE_MAX];
+    if (property_get("ro.hardware.egl", property, "default") > 0){
+        if (strcmp(property, "powervr") == 0)
+            mIsPowervr = true;
+    }
 }
 
 void SoftVideoEncoderOMXComponent::initPorts(
@@ -147,6 +152,139 @@ void SoftVideoEncoderOMXComponent::initPorts(
     updatePortParams();
 }
 
+void SoftVideoEncoderOMXComponent::initEgl(size_t width, size_t height){
+    if (mIsPowervr) {
+        if(mEglDisplay == EGL_NO_DISPLAY){
+            ALOGE("initEgl width: %d, height: %d", width, height);
+            mEglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+            eglInitialize(mEglDisplay, NULL, NULL);
+            ALOGI("eglInitialize: %s", eglStrError(eglGetError()));
+
+            EGLConfig config;
+            int num_config;
+            EGLint dpy_attrs[] = {
+                EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+                EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+                EGL_RED_SIZE, 8,
+                EGL_GREEN_SIZE, 8,
+                EGL_BLUE_SIZE, 8,
+                EGL_ALPHA_SIZE, 8,
+                EGL_NONE };
+            eglChooseConfig(mEglDisplay, dpy_attrs, &config, 1, &num_config);
+            ALOGI("eglChooseConfig: %s", eglStrError(eglGetError()));
+
+            EGLint context_attrs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
+            mEglContext = eglCreateContext(mEglDisplay, config,  EGL_NO_CONTEXT, context_attrs);
+            ALOGI("eglCreateContext: %s", eglStrError(eglGetError()));
+
+            EGLint pbuf_attrs[] = { EGL_WIDTH, (EGLint)width, EGL_HEIGHT, (EGLint)height, EGL_NONE };
+            mEglSurface = eglCreatePbufferSurface(mEglDisplay, config, pbuf_attrs);
+            ALOGI("eglCreatePbufferSurface: %s", eglStrError(eglGetError()));
+
+            eglMakeCurrent(mEglDisplay, mEglSurface, mEglSurface, mEglContext);
+            ALOGI("eglMakeCurrent: %s", eglStrError(eglGetError()));
+
+            mProgram = createProgram(vertSource, fragSource);
+            glUseProgram(mProgram);
+            ALOGI("glUseProgram: %d", glGetError());
+        }
+    }
+}
+
+GLint SoftVideoEncoderOMXComponent::createProgram(const char* vs, const char* fs) {
+    GLint success = 0;
+    GLint logLength = 0;
+    char infoLog[1024];
+
+    GLint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vs, 0);
+    glCompileShader(vertexShader);
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(vertexShader, sizeof(infoLog), &logLength, infoLog);
+        ALOGE("Vertex shader compilation failed:\n%s\n", infoLog);
+    }
+
+    GLint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fs, 0);
+    glCompileShader(fragmentShader);
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(fragmentShader, sizeof(infoLog), &logLength, infoLog);
+        ALOGE("Fragment shader compilation failed:\n%s\n", infoLog);
+    }
+
+    GLint program = glCreateProgram();
+    glAttachShader(program, fragmentShader);
+    glAttachShader(program, vertexShader);
+    glLinkProgram(program);
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success)
+    {
+        glGetProgramInfoLog(program, sizeof(infoLog), &logLength, infoLog);
+        ALOGE("Program linking failed:\n%s\n", infoLog);
+    }
+
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    return program;
+}
+
+const char *SoftVideoEncoderOMXComponent::eglStrError(EGLint err){
+    switch (err){
+        case EGL_SUCCESS:           return "EGL_SUCCESS";
+        case EGL_NOT_INITIALIZED:   return "EGL_NOT_INITIALIZED";
+        case EGL_BAD_ACCESS:        return "EGL_BAD_ACCESS";
+        case EGL_BAD_ALLOC:         return "EGL_BAD_ALLOC";
+        case EGL_BAD_ATTRIBUTE:     return "EGL_BAD_ATTRIBUTE";
+        case EGL_BAD_CONFIG:        return "EGL_BAD_CONFIG";
+        case EGL_BAD_CONTEXT:       return "EGL_BAD_CONTEXT";
+        case EGL_BAD_CURRENT_SURFACE: return "EGL_BAD_CURRENT_SURFACE";
+        case EGL_BAD_DISPLAY:       return "EGL_BAD_DISPLAY";
+        case EGL_BAD_MATCH:         return "EGL_BAD_MATCH";
+        case EGL_BAD_NATIVE_PIXMAP: return "EGL_BAD_NATIVE_PIXMAP";
+        case EGL_BAD_NATIVE_WINDOW: return "EGL_BAD_NATIVE_WINDOW";
+        case EGL_BAD_PARAMETER:     return "EGL_BAD_PARAMETER";
+        case EGL_BAD_SURFACE:       return "EGL_BAD_SURFACE";
+        case EGL_CONTEXT_LOST:      return "EGL_CONTEXT_LOST";
+        default: return "UNKNOWN";
+    }
+}
+
+void SoftVideoEncoderOMXComponent::closeEgl(){
+    ALOGE("closeEgl isPowervr: %x", mIsPowervr);
+    if (mIsPowervr) {
+        if(mShmData != NULL){
+            delete[] mShmData;
+            mShmData = NULL;
+            ALOGE("mShmData deleted and seted to NULL");
+        }
+        if (mEglDisplay == EGL_NO_DISPLAY){
+           return;
+        }
+        if(mProgram != 0){
+            glDeleteProgram(mProgram);
+            mProgram = 0;
+        }
+
+        eglMakeCurrent(mEglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+        if (mEglSurface != EGL_NO_SURFACE)
+            eglDestroySurface(mEglDisplay, mEglSurface);
+        if (mEglContext != EGL_NO_CONTEXT)
+            eglDestroyContext(mEglDisplay, mEglContext);
+
+        eglTerminate(mEglDisplay);
+
+        mEglDisplay = EGL_NO_DISPLAY;
+        mEglSurface = EGL_NO_SURFACE;
+        mEglContext = EGL_NO_CONTEXT;
+    }
+}
+
 void SoftVideoEncoderOMXComponent::updatePortParams() {
     OMX_PARAM_PORTDEFINITIONTYPE *inDef = &editPortInfo(kInputPortIndex)->mDef;
     inDef->format.video.nFrameWidth = mWidth;
@@ -181,6 +319,12 @@ OMX_ERRORTYPE SoftVideoEncoderOMXComponent::internalSetPortParams(
     if (port->nPortIndex == kInputPortIndex) {
         mWidth = port->format.video.nFrameWidth;
         mHeight = port->format.video.nFrameHeight;
+        if(mIsPowervr){
+            if(mShmData == NULL){
+                mShmData = new GLubyte[mWidth * mHeight * 4];
+                ALOGE("mShmData seted size: %d", mWidth * mHeight * 4);
+            }
+        }
 
         // xFramerate comes in Q16 format, in frames per second unit
         mFramerate = port->format.video.xFramerate;
@@ -651,6 +795,7 @@ const uint8_t *SoftVideoEncoderOMXComponent::extractGraphicBuffer(
         return NULL;
     }
 
+    //ALOGE("SoftVideoEncoderOMXComponent::extractGraphicBuffer format: %d", format);
     switch (format) {
         case HAL_PIXEL_FORMAT_YV12:  // YCrCb / YVU planar
             ycbcr.y = bits;
@@ -676,10 +821,43 @@ const uint8_t *SoftVideoEncoderOMXComponent::extractGraphicBuffer(
         case HAL_PIXEL_FORMAT_RGBX_8888:
         case HAL_PIXEL_FORMAT_RGBA_8888:
         case HAL_PIXEL_FORMAT_BGRA_8888:
-            ConvertRGB32ToPlanar(
+            if(mIsPowervr){
+                if(mEglDisplay != EGL_NO_DISPLAY){
+                    EGLint image_attrs[] = { EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE };
+
+                    VideoNativeMetadata &nativeMeta = *(VideoNativeMetadata *)src;
+                    ANativeWindowBuffer *buffer = nativeMeta.pBuffer;
+                    auto image = eglCreateImageKHR(mEglDisplay, EGL_NO_CONTEXT,
+                                                EGL_NATIVE_BUFFER_ANDROID, (EGLClientBuffer) buffer,
+                                                image_attrs);
+                    GLuint texture;
+                    glGenTextures(1, &texture);
+                    glBindTexture(GL_TEXTURE_2D, texture);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                    glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, image);
+
+                    drawQuad(0, 0, width, height);
+
+                    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, mShmData);
+
+                    ConvertRGB32ToPlanar(
+                        dst, dstStride, dstVStride,
+                        (const uint8_t *)mShmData, width, height, srcStride,
+                        format == HAL_PIXEL_FORMAT_BGRA_8888);
+
+                    glDeleteTextures(1, &texture);
+                    eglDestroyImageKHR(mEglDisplay, image);
+                }else{
+                    ALOGE("mEglDisplay not initialized.");
+                    return NULL;
+                }
+            }else{
+                ConvertRGB32ToPlanar(
                     dst, dstStride, dstVStride,
                     (const uint8_t *)bits, width, height, srcStride,
                     format == HAL_PIXEL_FORMAT_BGRA_8888);
+            }
             break;
         default:
             ALOGE("Unsupported pixel format %#x", format);
@@ -692,6 +870,44 @@ const uint8_t *SoftVideoEncoderOMXComponent::extractGraphicBuffer(
     }
 
     return dst;
+}
+
+void SoftVideoEncoderOMXComponent::drawQuad(int x, int y, int w, int h) const {
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    GLint program;
+
+    const GLfloat viewW = 0.5f * viewport[2];
+    const GLfloat viewH = 0.5f * viewport[3];
+    const GLfloat texW = 1.0f, texH = 1.0f;
+    const GLfloat quadX1 = x       / viewW - 1.0f, quadY1 = y       / viewH - 1.0f;
+    const GLfloat quadX2 = (x + w) / viewW - 1.0f, quadY2 = (y + h) / viewH - 1.0f;
+    const GLfloat texcoords[] =
+    {
+         0,       0,
+         0,       texH,
+         texW,    0,
+         texW,    texH
+    };
+
+    const GLfloat vertices[] =
+    {
+        quadX1, quadY1,
+        quadX1, quadY2,
+        quadX2, quadY1,
+        quadX2, quadY2,
+    };
+
+    glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+    GLint positionAttr = glGetAttribLocation(program, "in_position");
+    GLint texcoordAttr = glGetAttribLocation(program, "in_texcoord");
+
+    glVertexAttribPointer(positionAttr, 2, GL_FLOAT, GL_FALSE, 0, vertices);
+    glVertexAttribPointer(texcoordAttr, 2, GL_FLOAT, GL_FALSE, 0, texcoords);
+    glEnableVertexAttribArray(positionAttr);
+    glEnableVertexAttribArray(texcoordAttr);
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
 OMX_ERRORTYPE SoftVideoEncoderOMXComponent::getExtensionIndex(

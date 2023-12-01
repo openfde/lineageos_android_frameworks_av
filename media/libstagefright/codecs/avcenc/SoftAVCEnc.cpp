@@ -159,6 +159,7 @@ SoftAVC::SoftAVC(
 }
 
 SoftAVC::~SoftAVC() {
+    closeEgl();
     releaseEncoder();
     List<BufferInfo *> &outQueue = getPortQueue(1);
     List<BufferInfo *> &inQueue = getPortQueue(0);
@@ -1192,6 +1193,7 @@ OMX_ERRORTYPE SoftAVC::setEncodeArgs(
                 return OMX_ErrorUndefined;
             }
 
+            initEgl(mWidth, mHeight);
             source = extractGraphicBuffer(
                     conversionBuffer, (mWidth * mHeight * 3 / 2), source,
                     inputBufferHeader->nFilledLen, mWidth, mHeight);

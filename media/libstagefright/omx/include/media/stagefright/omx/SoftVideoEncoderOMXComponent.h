@@ -24,6 +24,14 @@
 
 #include "SimpleSoftOMXComponent.h"
 
+#define EGL_EGLEXT_PROTOTYPES
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#define GL_GLEXT_PROTOTYPES
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
+#include <EGL/eglplatform.h>
+
 struct hw_module_t;
 
 namespace android {
@@ -48,6 +56,8 @@ protected:
     void initPorts(
             OMX_U32 numInputBuffers, OMX_U32 numOutputBuffers, OMX_U32 outputBufferSize,
             const char *mime, OMX_U32 minCompressionRatio = 1);
+    void initEgl(size_t width, size_t height);
+    void closeEgl();
 
     static void setRawVideoSize(OMX_PARAM_PORTDEFINITIONTYPE *def);
 
@@ -70,6 +80,10 @@ protected:
     virtual OMX_ERRORTYPE getExtensionIndex(const char *name, OMX_INDEXTYPE *index);
 
     OMX_ERRORTYPE validateInputBuffer(const OMX_BUFFERHEADERTYPE *inputBufferHeader);
+
+    void drawQuad(int x, int y, int w, int h) const;
+    GLint createProgram(const char* vs, const char* fs);
+    const char *eglStrError(EGLint err);
 
     enum {
         kInputPortIndex = 0,
@@ -99,6 +113,36 @@ private:
     OMX_VIDEO_CODINGTYPE mCodingType;
     const CodecProfileLevel *mProfileLevels;
     size_t mNumProfileLevels;
+
+    bool mIsPowervr = false;
+    EGLDisplay mEglDisplay = EGL_NO_DISPLAY;
+    EGLContext mEglContext = EGL_NO_CONTEXT;
+    EGLSurface mEglSurface = EGL_NO_SURFACE;
+
+    const char *vertSource =
+        "precision mediump float;\n"
+        "attribute vec2 in_position;\n"
+        "attribute vec2 in_texcoord;\n"
+        "varying vec2 texcoord;\n"
+        "\n"
+        "void main()\n"
+        "{\n"
+        "   gl_Position = vec4(in_position, 0.0, 1.0);\n"
+        "   texcoord = in_texcoord;\n"
+        "}\n";
+
+    const char *fragSource =
+        "precision mediump float;\n"
+        "varying vec2 texcoord;\n"
+        "uniform sampler2D texture;\n"
+        "\n"
+        "void main()\n"
+        "{\n"
+        "   gl_FragColor = texture2D(texture, texcoord);\n"
+        "}\n";
+
+    GLubyte *mShmData = NULL;
+    GLint mProgram = 0;
 
     DISALLOW_EVIL_CONSTRUCTORS(SoftVideoEncoderOMXComponent);
 };

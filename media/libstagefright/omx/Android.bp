@@ -104,6 +104,8 @@ cc_library_shared {
         "libui",
         "libutils",
         "libcutils",
+        "libEGL",
+        "libGLESv2",
     ],
 
     cflags: [
@@ -182,6 +184,8 @@ cc_defaults {
         "libstagefright_foundation",
         "libutils",
         "liblog",
+        "libEGL",
+        "libGLESv2",
     ],
 
     sanitize: {
