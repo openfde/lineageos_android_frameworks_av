@@ -46,6 +46,20 @@ const static OMX_COLOR_FORMATTYPE kSupportedColorFormats[] = {
     OMX_COLOR_FormatAndroidOpaque
 };
 
+const GLfloat kPositionVertices[] = {
+	-1.0f, 1.0f,
+	-1.0f, -1.0f,
+	1.0f, -1.0f,
+	1.0f, 1.0f,
+};
+
+const GLfloat kYuvPositionVertices[] = {
+	0.0f, 1.0f,
+	0.0f, 0.0f,
+	1.0f, 0.0f,
+	1.0f, 1.0f,
+};
+
 template<class T>
 static void InitOMXParams(T *params) {
     params->nSize = sizeof(T);
@@ -152,10 +166,25 @@ void SoftVideoEncoderOMXComponent::initPorts(
     updatePortParams();
 }
 
-void SoftVideoEncoderOMXComponent::initEgl(size_t width, size_t height){
+void SoftVideoEncoderOMXComponent::initEgl(size_t width, size_t height, const uint8_t *src){
     if (mIsPowervr) {
         if(mEglDisplay == EGL_NO_DISPLAY){
-            ALOGE("initEgl width: %d, height: %d", width, height);
+            ALOGE("initEgl width: %zu, height: %zu", width, height);
+            MetadataBufferType bufferType = *(MetadataBufferType *)src;
+            bool usingANWBuffer = bufferType == kMetadataBufferTypeANWBuffer;
+            if (!usingANWBuffer && bufferType != kMetadataBufferTypeGrallocSource) {
+                ALOGE("Unsupported metadata type (%d)", bufferType);
+                return ;
+            }
+            int format;
+            if (usingANWBuffer) {
+                VideoNativeMetadata &nativeMeta = *(VideoNativeMetadata *)src;
+                ANativeWindowBuffer_t *buffer = nativeMeta.pBuffer;
+                format = buffer->format;
+            } else {
+                format = HAL_PIXEL_FORMAT_RGBA_8888;
+            }
+            bool isYuv = (format == HAL_PIXEL_FORMAT_RGBX_8888 || format == HAL_PIXEL_FORMAT_RGBA_8888 || format == HAL_PIXEL_FORMAT_BGRA_8888) ? false : true;
             mEglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
             eglInitialize(mEglDisplay, NULL, NULL);
             ALOGI("eglInitialize: %s", eglStrError(eglGetError()));
@@ -183,10 +212,29 @@ void SoftVideoEncoderOMXComponent::initEgl(size_t width, size_t height){
 
             eglMakeCurrent(mEglDisplay, mEglSurface, mEglSurface, mEglContext);
             ALOGI("eglMakeCurrent: %s", eglStrError(eglGetError()));
-
-            mProgram = createProgram(vertSource, fragSource);
+            mProgram = createProgram(isYuv ? vertSourceYuv : vertSource, isYuv ? fragSourceYuv : fragSource);
             glUseProgram(mProgram);
             ALOGI("glUseProgram: %d", glGetError());
+            if (isYuv) {
+                mPosition = glGetAttribLocation(mProgram, "vPosition");
+                ALOGI("glGetAttribLocation: %s", eglStrError(eglGetError()));
+                mYuvPosition = glGetAttribLocation(mProgram, "vYuvTexCoords");
+                ALOGI("glGetAttribLocation: %s", eglStrError(eglGetError()));
+                mYuvTexSampler = glGetUniformLocation(mProgram, "yuvTexSampler");
+                ALOGI("glGetUniformLocation: %s", eglStrError(eglGetError()));
+                glVertexAttribPointer(mPosition, 2, GL_FLOAT, GL_FALSE, 0, kPositionVertices);
+                ALOGI("glVertexAttribPointer: %d", glGetError());
+                glEnableVertexAttribArray(mPosition);
+                ALOGI("glEnableVertexAttribArray: %d", glGetError());
+                glVertexAttribPointer(mYuvPosition, 2, GL_FLOAT, GL_FALSE, 0, kYuvPositionVertices);
+                ALOGI("glVertexAttribPointer: %d", glGetError());
+                glEnableVertexAttribArray(mYuvPosition);
+                ALOGI("glEnableVertexAttribArray: %d", glGetError());
+                glUniform1i(mYuvTexSampler, 0);
+                ALOGI("glUniform1i: %d", glGetError());
+                glViewport(0, 0, width, height);
+                ALOGI("glViewport: %s", eglStrError(eglGetError()));
+            }
         }
     }
 }
@@ -733,9 +781,9 @@ const uint8_t *SoftVideoEncoderOMXComponent::extractGraphicBuffer(
         srcStride = buffer->stride;
         srcVStride = buffer->height;
         // convert stride from pixels to bytes
-        if (format != HAL_PIXEL_FORMAT_YV12 &&
+        if (mIsPowervr || (format != HAL_PIXEL_FORMAT_YV12 &&
             format != HAL_PIXEL_FORMAT_YCrCb_420_SP &&
-            format != HAL_PIXEL_FORMAT_YCbCr_420_888) {
+            format != HAL_PIXEL_FORMAT_YCbCr_420_888)) {
             // TODO do we need to support other formats?
             srcStride *= 4;
         }
@@ -816,7 +864,33 @@ const uint8_t *SoftVideoEncoderOMXComponent::extractGraphicBuffer(
             ConvertFlexYUVToPlanar(dst, dstStride, dstVStride, &ycbcr, width, height);
             break;
         case HAL_PIXEL_FORMAT_YCbCr_420_888:  // YCbCr / YUV planar
-            ConvertFlexYUVToPlanar(dst, dstStride, dstVStride, &ycbcr, width, height);
+            if (mIsPowervr) {
+                if (mEglDisplay != EGL_NO_DISPLAY) {
+                    VideoNativeMetadata &nativeMeta = *(VideoNativeMetadata *)src;
+                    ANativeWindowBuffer *buffer = nativeMeta.pBuffer;
+                    auto image = eglCreateImageKHR(mEglDisplay, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID,
+                        (EGLClientBuffer) buffer, 0);
+                    GLuint texture;
+                    glGenTextures(1, &texture);
+                    glBindTexture(GL_TEXTURE_EXTERNAL_OES, texture);
+                    glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, (GLeglImageOES)image);
+
+                    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+                    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, mShmData);
+
+                    ConvertRGB32ToPlanar(dst, dstStride, dstVStride, (const uint8_t *)mShmData, width,
+                        height, srcStride, format == HAL_PIXEL_FORMAT_BGRA_8888);
+
+                    glDeleteTextures(1, &texture);
+                    eglDestroyImageKHR(mEglDisplay, image);
+                } else {
+                    ALOGE("mEglDisplay not initialized.");
+                    return NULL;
+                }
+            } else {
+                ConvertFlexYUVToPlanar(dst, dstStride, dstVStride, &ycbcr, width, height);
+            }
             break;
         case HAL_PIXEL_FORMAT_RGBX_8888:
         case HAL_PIXEL_FORMAT_RGBA_8888:

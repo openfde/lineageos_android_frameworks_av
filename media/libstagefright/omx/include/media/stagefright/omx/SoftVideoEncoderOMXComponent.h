@@ -56,7 +56,7 @@ protected:
     void initPorts(
             OMX_U32 numInputBuffers, OMX_U32 numOutputBuffers, OMX_U32 outputBufferSize,
             const char *mime, OMX_U32 minCompressionRatio = 1);
-    void initEgl(size_t width, size_t height);
+    void initEgl(size_t width, size_t height, const uint8_t *src);
     void closeEgl();
 
     static void setRawVideoSize(OMX_PARAM_PORTDEFINITIONTYPE *def);
@@ -141,6 +141,24 @@ private:
         "   gl_FragColor = texture2D(texture, texcoord);\n"
         "}\n";
 
+    const char *vertSourceYuv = "attribute vec4 vPosition;\n"
+        "attribute vec2 vYuvTexCoords;\n"
+        "varying vec2 yuvTexCoords;\n"
+        "void main() {\n"
+        "  yuvTexCoords = vYuvTexCoords;\n"
+        "  gl_Position = vPosition;\n"
+        "}\n";
+
+    const char *fragSourceYuv = "#extension GL_OES_EGL_image_external : require\n"
+        "precision mediump float;\n"
+        "uniform samplerExternalOES yuvTexSampler;\n"
+        "varying vec2 yuvTexCoords;\n"
+        "void main() {\n"
+        "  gl_FragColor = texture2D(yuvTexSampler, yuvTexCoords);\n"
+        "}\n";
+    GLint mPosition;
+    GLint mYuvPosition;
+    GLint mYuvTexSampler;
     GLubyte *mShmData = NULL;
     GLint mProgram = 0;
 

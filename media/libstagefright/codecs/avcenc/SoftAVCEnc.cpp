@@ -1193,7 +1193,7 @@ OMX_ERRORTYPE SoftAVC::setEncodeArgs(
                 return OMX_ErrorUndefined;
             }
 
-            initEgl(mWidth, mHeight);
+            initEgl(mWidth, mHeight, source);
             source = extractGraphicBuffer(
                     conversionBuffer, (mWidth * mHeight * 3 / 2), source,
                     inputBufferHeader->nFilledLen, mWidth, mHeight);
