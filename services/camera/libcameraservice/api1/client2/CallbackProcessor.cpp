@@ -492,6 +492,14 @@ status_t CallbackProcessor::convertFromFlexibleYuv(int32_t previewFormat,
                 crcbDst += src.width;
                 crSrc += src.chromaStride;
             }
+        } else if (crSrc == cbSrc + 1 && src.chromaStep == 2) {
+            ALOGV("%s: Fast1 NV21->NV21", __FUNCTION__);
+            // Source has semiplanar CbCr chroma layout, can copy by rows but lose first cb data
+            for (size_t row = 0; row < chromaHeight; row++) {
+                memcpy(crcbDst, crSrc, row + 1 < chromaHeight ? src.width : src.width - 1);
+                crcbDst += src.width;
+                crSrc += src.chromaStride;
+            }
         } else {
             ALOGV("%s: Generic->NV21", __FUNCTION__);
             // Generic copy, always works but not very efficient
