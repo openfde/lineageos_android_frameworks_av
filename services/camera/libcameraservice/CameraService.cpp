@@ -1513,6 +1513,8 @@ Status CameraService::connect(
     }
 
     *device = client;
+    const char* packageName = String8(clientPackageName).c_str();
+    property_set("fde.last_app_use_camera", packageName);
     return ret;
 }
 
@@ -1540,6 +1542,8 @@ Status CameraService::connectLegacy(
     }
 
     *device = client;
+    const char* packageName = String8(clientPackageName).c_str();
+    property_set("fde.last_app_use_camera", packageName);
     return ret;
 }
 
@@ -1633,6 +1637,8 @@ Status CameraService::connectDevice(
     }
 
     *device = client;
+    const char* packageName = String8(clientPackageName).c_str();
+    property_set("fde.last_app_use_camera", packageName);
     return ret;
 }
 
