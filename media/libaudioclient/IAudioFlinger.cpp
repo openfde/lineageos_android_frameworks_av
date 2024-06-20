@@ -976,8 +976,8 @@ status_t BnAudioFlinger::onTransact(
 
     // make sure the following transactions come from system components
     switch (code) {
-        case SET_MASTER_VOLUME:
-        case SET_MASTER_MUTE:
+        //case SET_MASTER_VOLUME:
+        //case SET_MASTER_MUTE:
         case SET_MODE:
         case SET_MIC_MUTE:
         case SET_LOW_RAM_DEVICE:
