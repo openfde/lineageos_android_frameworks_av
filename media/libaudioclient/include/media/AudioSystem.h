@@ -202,6 +202,11 @@ public:
     static status_t getFrameCountHAL(audio_io_handle_t ioHandle,
                                      size_t* frameCount);
 
+    static String8 getDevs(bool input);
+    static status_t setDevVolume(bool input, const String8& devName, float volume);
+    static status_t setDevMute(bool input, const String8& devName, bool mute);
+    static String8 setDefaultDev(bool input, const String8& devName, bool needInfo);
+
     // Events used to synchronize actions between audio sessions.
     // For instance SYNC_EVENT_PRESENTATION_COMPLETE can be used to delay recording start until
     // playback is complete on another audio session.

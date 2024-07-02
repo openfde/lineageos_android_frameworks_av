@@ -119,6 +119,11 @@ class DeviceHalInterface : public RefBase
 
     virtual status_t dump(int fd) = 0;
 
+    virtual status_t getDevs(bool input, String8 *result) = 0;
+    virtual status_t setDevVolume(bool input, const String8& devName, float volume) = 0;
+    virtual status_t setDevMute(bool input, const String8& devName, bool mute) = 0;
+    virtual status_t setDefaultDev(bool input, const String8& devName, bool needInfo, String8 *result) = 0;
+
   protected:
     // Subclasses can not be constructed directly by clients.
     DeviceHalInterface() {}

@@ -296,6 +296,11 @@ public:
                                 Parcel* reply,
                                 uint32_t flags);
 
+    virtual String8 getDevs(bool input) const;
+    virtual status_t setDevVolume(bool input, const String8& devName, float volume) const;
+    virtual status_t setDevMute(bool input, const String8& devName, bool mute) const;
+    virtual String8 setDefaultDev(bool input, const String8& devName, bool needInfo) const;
+
     // end of IAudioFlinger interface
 
     sp<NBLog::Writer>   newWriter_l(size_t size, const char *name);
@@ -869,6 +874,10 @@ using effect_buffer_t = int16_t;
         AUDIO_HW_SET_MASTER_MUTE,       // set_master_mute
         AUDIO_HW_GET_MASTER_MUTE,       // get_master_mute
         AUDIO_HW_GET_MICROPHONES,       // getMicrophones
+        AUDIO_HW_GET_DEVS,              // setDevVolume
+        AUDIO_HW_SET_DEV_VOLUME,        // setDevs
+        AUDIO_HW_SET_DEV_MUTE,          // setDevMute
+        AUDIO_HW_SET_DEFAULT_DEV,       // setDefaultDev
     };
 
     mutable     hardware_call_state                 mHardwareStatus;    // for dump only

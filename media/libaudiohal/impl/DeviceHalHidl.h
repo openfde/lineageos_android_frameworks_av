@@ -117,6 +117,10 @@ class DeviceHalHidl : public DeviceHalInterface, public ConversionHelperHidl
     status_t removeDeviceEffect(audio_port_handle_t device, sp<EffectHalInterface> effect) override;
 
     virtual status_t dump(int fd);
+    virtual status_t getDevs(bool input, String8 *result);
+    virtual status_t setDevVolume(bool input, const String8 &devName, float volume);
+    virtual status_t setDevMute(bool input, const String8 &devName, bool mute);
+    virtual status_t setDefaultDev(bool input, const String8 &devName, bool needInfo, String8 *result);
 
   private:
     friend class DevicesFactoryHalHidl;

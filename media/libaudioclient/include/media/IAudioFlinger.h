@@ -540,6 +540,11 @@ public:
     virtual status_t getMicrophones(std::vector<media::MicrophoneInfo> *microphones) = 0;
 
     virtual status_t setAudioHalPids(const std::vector<pid_t>& pids) = 0;
+
+    virtual String8 getDevs(bool input) const = 0;
+    virtual status_t setDevVolume(bool input, const String8& devName, float volume) const = 0;
+    virtual status_t setDevMute(bool input, const String8& devName, bool mute) const = 0;
+    virtual String8 setDefaultDev(bool input, const String8& devName, bool needInfo) const = 0;
 };
 
 

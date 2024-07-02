@@ -459,5 +459,46 @@ status_t DeviceHalHidl::dump(int fd) {
     return processReturn("dump", ret);
 }
 
+status_t DeviceHalHidl::getDevs(bool input, String8 *result) {
+    result->clear();
+    if (mDevice == 0) return NO_INIT;
+    Result retval;
+    Return<void> ret = utils::getDevs(mDevice,
+            input,
+            [&](Result r, const hidl_string& info) {
+                retval = r;
+                if (retval == Result::OK) {
+                    result->setTo(info.c_str());
+                }
+            });
+    return processReturn("getDevs", ret, retval);
+}
+
+status_t DeviceHalHidl::setDevVolume(bool input, const String8 &devName, float volume) {
+    if (mDevice == 0) return NO_INIT;
+    return processReturn("setDevVolume", mDevice->setDevVolume(input, devName.string(), volume));
+}
+
+status_t DeviceHalHidl::setDevMute(bool input, const String8 &devName, bool mute) {
+    if (mDevice == 0) return NO_INIT;
+    return processReturn("setDevMute", mDevice->setDevMute(input, devName.string(), mute));
+}
+
+status_t DeviceHalHidl::setDefaultDev(bool input, const String8 &devName, bool needInfo, String8 *result) {
+    result->clear();
+    if (mDevice == 0) return NO_INIT;
+    Result retval;
+    hidl_string hidlDevName = devName.string();
+    Return<void> ret = utils::setDefaultDev(mDevice,
+            input, hidlDevName, needInfo, 
+            [&](Result r, const hidl_string& info) {
+                retval = r;
+                if (retval == Result::OK) {
+                    result->setTo(info.c_str());
+                }
+            });
+    return processReturn("setDefaultDev", ret, retval);
+}
+
 } // namespace CPP_VERSION
 } // namespace android
