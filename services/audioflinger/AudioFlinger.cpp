@@ -1893,6 +1893,80 @@ sp<AudioFlinger::ThreadBase> AudioFlinger::getEffectThread_l(audio_session_t ses
     return thread;
 }
 
+String8 AudioFlinger::getDevs(bool input) const
+{
+    ALOGVV("getDevs() input %d, calling pid %d", input, IPCThreadState::self()->getCallingPid());
+
+    Mutex::Autolock _l(mLock);
+    String8 out_s8;
+
+    AutoMutex lock(mHardwareLock);
+    for (size_t i = 0; i < mAudioHwDevs.size(); i++) {
+        String8 s;
+        mHardwareStatus = AUDIO_HW_GET_DEVS;
+        sp<DeviceHalInterface> dev = mAudioHwDevs.valueAt(i)->hwDevice();
+        status_t result = dev->getDevs(input, &s);
+        mHardwareStatus = AUDIO_HW_IDLE;
+        if (result == OK) out_s8 += s;
+    }
+    return out_s8;
+}
+
+status_t AudioFlinger::setDevVolume(bool input, const String8& devName, float volume) const
+{
+    ALOGVV("setDevVolume() input %d, devName %s, volume %f, calling pid %d", 
+		input, devName.c_str(), volume, IPCThreadState::self()->getCallingPid());
+
+    Mutex::Autolock _l(mLock);
+    {
+        AutoMutex lock(mHardwareLock);
+        for (size_t i = 0; i < mAudioHwDevs.size(); i++) {
+            AudioHwDevice *dev = mAudioHwDevs.valueAt(i);
+            mHardwareStatus = AUDIO_HW_SET_DEV_VOLUME;
+            dev->hwDevice()->setDevVolume(input, devName, volume);
+            mHardwareStatus = AUDIO_HW_IDLE;
+        }
+    }
+    return NO_ERROR;
+}
+
+status_t AudioFlinger::setDevMute(bool input, const String8& devName, bool mute) const
+{
+    ALOGVV("setDevMute() input %d, devName %s, mute %d, calling pid %d", 
+		input, devName.c_str(), mute, IPCThreadState::self()->getCallingPid());
+
+    Mutex::Autolock _l(mLock);
+    {
+        AutoMutex lock(mHardwareLock);
+        for (size_t i = 0; i < mAudioHwDevs.size(); i++) {
+            AudioHwDevice *dev = mAudioHwDevs.valueAt(i);
+            mHardwareStatus = AUDIO_HW_SET_DEV_MUTE;
+            dev->hwDevice()->setDevMute(input, devName, mute);
+            mHardwareStatus = AUDIO_HW_IDLE;
+        }
+    }
+    return NO_ERROR;
+}
+
+String8 AudioFlinger::setDefaultDev(bool input, const String8& devName, bool needInfo) const
+{
+    ALOGVV("setDefaultDev() input %d, devName %s, needInfo %d, calling pid %d", 
+		input, devName.c_str(), needInfo, IPCThreadState::self()->getCallingPid());
+
+    Mutex::Autolock _l(mLock);
+    String8 out_s8;
+
+    AutoMutex lock(mHardwareLock);
+    for (size_t i = 0; i < mAudioHwDevs.size(); i++) {
+        String8 s;
+        mHardwareStatus = AUDIO_HW_SET_DEFAULT_DEV;
+        sp<DeviceHalInterface> dev = mAudioHwDevs.valueAt(i)->hwDevice();
+        status_t result = dev->setDefaultDev(input, devName, needInfo, &s);
+        mHardwareStatus = AUDIO_HW_IDLE;
+        if (result == OK) out_s8 += s;
+    }
+    return out_s8;
+}
 
 
 // ----------------------------------------------------------------------------

@@ -494,6 +494,40 @@ status_t AudioSystem::getFrameCountHAL(audio_io_handle_t ioHandle,
     return NO_ERROR;
 }
 
+String8 AudioSystem::getDevs(bool input)
+{
+   const sp<IAudioFlinger>& af = AudioSystem::get_audio_flinger();
+   String8 result = String8("");
+   if (af == 0) return result;
+
+   result = af->getDevs(input);
+   return result;
+}
+
+status_t AudioSystem::setDevVolume(bool input, const String8& devName, float volume)
+{
+    const sp<IAudioFlinger>& af = AudioSystem::get_audio_flinger();
+    if (af == 0) return PERMISSION_DENIED;
+    return af->setDevVolume(input, devName, volume);
+}
+
+status_t AudioSystem::setDevMute(bool input, const String8& devName, bool mute)
+{
+    const sp<IAudioFlinger>& af = AudioSystem::get_audio_flinger();
+    if (af == 0) return PERMISSION_DENIED;
+    return af->setDevMute(input, devName, mute);
+}
+
+String8 AudioSystem::setDefaultDev(bool input, const String8& devName, bool needInfo)
+{
+   const sp<IAudioFlinger>& af = AudioSystem::get_audio_flinger();
+   String8 result = String8("1");
+   if (af == 0) return result;
+
+   result = af->setDefaultDev(input, devName, needInfo);
+   return result;
+}
+
 // ---------------------------------------------------------------------------
 
 

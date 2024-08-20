@@ -229,5 +229,39 @@ void DeviceHalLocal::closeInputStream(struct audio_stream_in *stream_in) {
     mDev->close_input_stream(mDev, stream_in);
 }
 
+status_t DeviceHalLocal::getDevs(bool input, String8 *result) {
+    if (mDev->get_devs == NULL) return INVALID_OPERATION;
+    char *halResult = mDev->get_devs(mDev, input);
+    if (halResult != NULL) {
+        result->setTo(halResult);
+        free(halResult);
+    } else {
+        result->clear();
+    }
+    return OK;
+}
+
+status_t DeviceHalLocal::setDevVolume(bool input, const String8& devName, float volume) {
+    if (mDev->set_dev_volume == NULL) return INVALID_OPERATION;
+    return mDev->set_dev_volume(mDev, input, devName.string(), volume);
+}
+
+status_t DeviceHalLocal::setDevMute(bool input, const String8& devName, bool mute) {
+    if (mDev->set_dev_mute == NULL) return INVALID_OPERATION;
+    return mDev->set_dev_mute(mDev, input, devName.string(), mute);
+}
+
+status_t DeviceHalLocal::setDefaultDev(bool input, const String8& devName, bool needInfo, String8 *result) {
+    if (mDev->get_devs == NULL) return INVALID_OPERATION;
+    char *halResult = mDev->set_default_dev(mDev, input, devName.string(), needInfo);
+    if (halResult != NULL) {
+        result->setTo(halResult);
+        free(halResult);
+    } else {
+        result->clear();
+    }
+    return OK;
+}
+
 } // namespace CPP_VERSION
 } // namespace android

@@ -91,7 +91,11 @@ enum {
     SET_MASTER_BALANCE,
     GET_MASTER_BALANCE,
     SET_EFFECT_SUSPENDED,
-    SET_AUDIO_HAL_PIDS
+    SET_AUDIO_HAL_PIDS,
+    GET_DEVS,
+    SET_DEV_VOLUME,
+    SET_DEV_MUTE,
+    SET_DEFAULT_DEV
 };
 
 #define MAX_ITEMS_PER_LIST 1024
@@ -926,6 +930,44 @@ public:
         }
         return static_cast <status_t> (reply.readInt32());
     }
+    virtual String8 getDevs(bool input) const
+    {
+        Parcel data, reply;
+        data.writeInterfaceToken(IAudioFlinger::getInterfaceDescriptor());
+        data.writeInt32(input);
+        remote()->transact(GET_DEVS, data, &reply);
+        return reply.readString8();
+    }
+    virtual status_t setDevVolume(bool input, const String8& devName, float volume) const
+    {
+        Parcel data, reply;
+        data.writeInterfaceToken(IAudioFlinger::getInterfaceDescriptor());
+        data.writeInt32(input);
+        data.writeString8(devName);
+        data.writeFloat(volume);
+        remote()->transact(SET_DEV_VOLUME, data, &reply);
+        return reply.readInt32();
+    }
+    virtual status_t setDevMute(bool input, const String8& devName, bool mute) const
+    {
+        Parcel data, reply;
+        data.writeInterfaceToken(IAudioFlinger::getInterfaceDescriptor());
+        data.writeInt32(input);
+        data.writeString8(devName);
+        data.writeInt32(mute);
+        remote()->transact(SET_DEV_MUTE, data, &reply);
+        return reply.readInt32();
+    }
+    virtual String8 setDefaultDev(bool input, const String8& devName, bool needInfo) const
+    {
+        Parcel data, reply;
+        data.writeInterfaceToken(IAudioFlinger::getInterfaceDescriptor());
+        data.writeInt32(input);
+        data.writeString8(devName);
+        data.writeInt32(needInfo);
+        remote()->transact(SET_DEFAULT_DEV, data, &reply);
+        return reply.readString8();
+    }
 };
 
 IMPLEMENT_META_INTERFACE(AudioFlinger, "android.media.IAudioFlinger");
@@ -1621,6 +1663,36 @@ status_t BnAudioFlinger::onTransact(
             reply->writeInt32(setAudioHalPids(pids));
             return NO_ERROR;
         }
+        case GET_DEVS: {
+            CHECK_INTERFACE(IAudioFlinger, data, reply);
+            int input = data.readInt32();
+            reply->writeString8(getDevs(input));
+            return NO_ERROR;
+        } break;
+        case SET_DEV_VOLUME: {
+            CHECK_INTERFACE(IAudioFlinger, data, reply);
+            int input = data.readInt32();
+            String8 devName(data.readString8());
+            float volume = data.readFloat();
+            reply->writeInt32(setDevVolume(input, devName, volume));
+            return NO_ERROR;
+        } break;
+        case SET_DEV_MUTE: {
+            CHECK_INTERFACE(IAudioFlinger, data, reply);
+            int input = data.readInt32();
+            String8 devName(data.readString8());
+            int mute = data.readInt32();
+            reply->writeInt32(setDevMute(input, devName, mute));
+            return NO_ERROR;
+        } break;
+        case SET_DEFAULT_DEV: {
+            CHECK_INTERFACE(IAudioFlinger, data, reply);
+            int input = data.readInt32();
+            String8 devName(data.readString8());
+            int needInfo = data.readInt32();
+            reply->writeString8(setDefaultDev(input, devName, needInfo));
+            return NO_ERROR;
+        } break;
         default:
             return BBinder::onTransact(code, data, reply, flags);
     }

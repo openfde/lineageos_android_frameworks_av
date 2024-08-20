@@ -114,6 +114,11 @@ class DeviceHalLocal : public DeviceHalInterface
     void closeOutputStream(struct audio_stream_out *stream_out);
     void closeInputStream(struct audio_stream_in *stream_in);
 
+    virtual status_t getDevs(bool input, String8 *result);
+    virtual status_t setDevVolume(bool input, const String8& devName, float volume);
+    virtual status_t setDevMute(bool input, const String8& devName, bool mute);
+    virtual status_t setDefaultDev(bool input, const String8& devName, bool needInfo, String8 *result);
+
   private:
     audio_hw_device_t *mDev;
 

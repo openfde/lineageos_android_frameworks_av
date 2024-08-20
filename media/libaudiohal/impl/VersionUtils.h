@@ -56,6 +56,17 @@ Return<Result> setParameters(T& object, hidl_vec<ParameterValue> context,
 }
 #endif
 
+template <class T, class Callback>
+Return<void> getDevs(T& object, bool input, Callback callback) {
+    return object->getDevs(input, callback);
+}
+
+template <class T, class Callback>
+Return<void> setDefaultDev(T& object, bool input, hidl_string devName, 
+                            bool needInfo, Callback callback) {
+    return object->setDefaultDev(input, devName, needInfo, callback);
+}
+
 } // namespace utils
 } // namespace CPP_VERSION
 } // namespace android
