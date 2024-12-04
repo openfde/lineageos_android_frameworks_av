@@ -374,7 +374,7 @@ c2_status_t C2SoftHevcDec::onFlush_sm() {
     uint32_t displayStride = mStride;
     uint32_t displayHeight = mHeight;
     uint32_t bufferSize = displayStride * displayHeight * 3 / 2;
-    mOutBufferFlush = (uint8_t *)ivd_aligned_malloc(nullptr, 128, bufferSize);
+    mOutBufferFlush = (uint8_t *)ivd_aligned_malloc(nullptr, 512, bufferSize);
     if (!mOutBufferFlush) {
         ALOGE("could not allocate tmp output buffer (for flush) of size %u ", bufferSize);
         return C2_NO_MEMORY;
@@ -505,7 +505,7 @@ status_t C2SoftHevcDec::getVersion() {
 status_t C2SoftHevcDec::initDecoder() {
     if (OK != createDecoder()) return UNKNOWN_ERROR;
     mNumCores = MIN(getCpuCoreCount(), MAX_NUM_CORES);
-    mStride = ALIGN128(mWidth);
+    mStride = ALIGN512(mWidth);
     mSignalledError = false;
     resetPlugin();
     (void) setNumCores();
@@ -773,20 +773,20 @@ c2_status_t C2SoftHevcDec::ensureDecoderState(const std::shared_ptr<C2BlockPool>
         return C2_CORRUPTED;
     }
     if (mOutBlock &&
-            (mOutBlock->width() != ALIGN128(mWidth) || mOutBlock->height() != mHeight)) {
+            (mOutBlock->width() != ALIGN512(mWidth) || mOutBlock->height() != mHeight)) {
         mOutBlock.reset();
     }
     if (!mOutBlock) {
         uint32_t format = HAL_PIXEL_FORMAT_YV12;
         C2MemoryUsage usage = { C2MemoryUsage::CPU_READ, C2MemoryUsage::CPU_WRITE };
         c2_status_t err =
-            pool->fetchGraphicBlock(ALIGN128(mWidth), mHeight, format, usage, &mOutBlock);
+            pool->fetchGraphicBlock(ALIGN512(mWidth), mHeight, format, usage, &mOutBlock);
         if (err != C2_OK) {
             ALOGE("fetchGraphicBlock for Output failed with status %d", err);
             return err;
         }
         ALOGV("provided (%dx%d) required (%dx%d)",
-              mOutBlock->width(), mOutBlock->height(), ALIGN128(mWidth), mHeight);
+              mOutBlock->width(), mOutBlock->height(), ALIGN512(mWidth), mHeight);
     }
 
     return C2_OK;
@@ -921,7 +921,7 @@ void C2SoftHevcDec::process(
         if (0 < ps_decode_op->u4_pic_wd && 0 < ps_decode_op->u4_pic_ht) {
             if (mHeaderDecoded == false) {
                 mHeaderDecoded = true;
-                mStride = ALIGN128(ps_decode_op->u4_pic_wd);
+                mStride = ALIGN512(ps_decode_op->u4_pic_wd);
                 setParams(mStride, IVD_DECODE_FRAME);
             }
             if (ps_decode_op->u4_pic_wd != mWidth ||  ps_decode_op->u4_pic_ht != mHeight) {

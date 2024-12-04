@@ -40,6 +40,8 @@ namespace android {
 #define ivdext_ctl_get_vui_params_ip_t  ih264d_ctl_get_vui_params_ip_t
 #define ivdext_ctl_get_vui_params_op_t  ih264d_ctl_get_vui_params_op_t
 #define ALIGN128(x)                     ((((x) + 127) >> 7) << 7)
+#define ALIGN512(x)                     ((((x) + 511) >> 9) << 9)
+
 #define MAX_NUM_CORES                   4
 #define IVDEXT_CMD_CTL_SET_NUM_CORES    \
         (IVD_CONTROL_API_COMMAND_TYPE_T)IH264D_CMD_CTL_SET_NUM_CORES
