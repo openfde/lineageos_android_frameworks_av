@@ -293,6 +293,10 @@ interface IAudioFlingerService {
      */
     AudioPortFw getAudioMixPort(in AudioPortFw devicePort, in AudioPortFw mixPort);
 
+    @utf8InCpp String getDevs(boolean input);
+    void setDevVolume(boolean input, @utf8InCpp String devName, float volume);
+    void setDevMute(boolean input, @utf8InCpp String devName, boolean mute);
+    @utf8InCpp String setDefaultDev(boolean input, @utf8InCpp String devName, boolean needInfo);
     // When adding a new method, please review and update
     // IAudioFlinger.h AudioFlingerServerAdapter::Delegate::TransactionCode
     // AudioFlinger.cpp AudioFlinger::onTransactWrapper()

@@ -918,6 +918,37 @@ status_t AudioFlingerClientAdapter::getAudioMixPort(const struct audio_port_v7 *
     return OK;
 }
 
+String8 AudioFlingerClientAdapter::getDevs(bool input) const {
+    auto result = [&]() -> ConversionResult<String8> {
+        std::string aidlRet;
+        RETURN_IF_ERROR(statusTFromBinderStatus(
+                mDelegate->getDevs(input, &aidlRet)));
+        return aidl2legacy_string_view_String8(aidlRet);
+    }();
+    return result.value_or(String8());
+}
+
+status_t AudioFlingerClientAdapter::setDevVolume(bool input, const String8& devName, float volume) const {
+    std::string devNameAidl = VALUE_OR_RETURN_STATUS(legacy2aidl_String8_string(devName));
+    return statusTFromBinderStatus(mDelegate->setDevVolume(input, devNameAidl, volume));
+}
+
+status_t AudioFlingerClientAdapter::setDevMute(bool input, const String8& devName, bool mute) const {
+    std::string devNameAidl = VALUE_OR_RETURN_STATUS(legacy2aidl_String8_string(devName));
+    return statusTFromBinderStatus(mDelegate->setDevMute(input, devNameAidl, mute));
+}
+
+String8 AudioFlingerClientAdapter::setDefaultDev(bool input, const String8& devName, bool needInfo) const {
+    auto result = [&]() -> ConversionResult<String8> {
+        std::string aidlRet;
+        std::string devNameAidl = VALUE_OR_RETURN(legacy2aidl_String8_string(devName));
+        RETURN_IF_ERROR(statusTFromBinderStatus(
+                mDelegate->setDefaultDev(input, devNameAidl, needInfo, &aidlRet)));
+        return aidl2legacy_string_view_String8(aidlRet);
+    }();
+    return result.value_or(String8());
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // AudioFlingerServerAdapter
 AudioFlingerServerAdapter::AudioFlingerServerAdapter(
@@ -1473,6 +1504,29 @@ Status AudioFlingerServerAdapter::getAudioMixPort(const media::AudioPortFw &devi
             aidl2legacy_AudioPortFw_audio_port_v7(mixPort));
     RETURN_BINDER_IF_ERROR(mDelegate->getAudioMixPort(&devicePortLegacy, &mixPortLegacy));
     *_aidl_return = VALUE_OR_RETURN_BINDER(legacy2aidl_audio_port_v7_AudioPortFw(mixPortLegacy));
+    return Status::ok();
+}
+
+Status AudioFlingerServerAdapter::getDevs(bool input, std::string* _aidl_return) {
+    *_aidl_return = VALUE_OR_RETURN_BINDER(
+            legacy2aidl_String8_string(mDelegate->getDevs(input)));
+    return Status::ok();
+}
+
+Status AudioFlingerServerAdapter::setDevVolume(bool input, const std::string& devName, float volume) {
+    String8 devNameLegacy = VALUE_OR_RETURN_BINDER(aidl2legacy_string_view_String8(devName));
+    return Status::fromStatusT(mDelegate->setDevVolume(input, devNameLegacy, volume));
+}
+
+Status AudioFlingerServerAdapter::setDevMute(bool input, const std::string& devName, bool mute) {
+    String8 devNameLegacy = VALUE_OR_RETURN_BINDER(aidl2legacy_string_view_String8(devName));
+    return Status::fromStatusT(mDelegate->setDevMute(input, devNameLegacy, mute));
+}
+
+Status AudioFlingerServerAdapter::setDefaultDev(bool input, const std::string& devName, bool needInfo, std::string* _aidl_return) {
+    String8 devNameLegacy = VALUE_OR_RETURN_BINDER(aidl2legacy_string_view_String8(devName));
+    *_aidl_return = VALUE_OR_RETURN_BINDER(
+            legacy2aidl_String8_string(mDelegate->setDefaultDev(input, devNameLegacy, needInfo)));
     return Status::ok();
 }
 

@@ -193,6 +193,10 @@ BINDER_METHOD_ENTRY(supportsBluetoothVariableLatency) \
 BINDER_METHOD_ENTRY(getSoundDoseInterface) \
 BINDER_METHOD_ENTRY(getAudioPolicyConfig) \
 BINDER_METHOD_ENTRY(getAudioMixPort) \
+BINDER_METHOD_ENTRY(getDevs) \
+BINDER_METHOD_ENTRY(setDevVolume) \
+BINDER_METHOD_ENTRY(setDevMute) \
+BINDER_METHOD_ENTRY(setDefaultDev) \
 
 // singleton for Binder Method Statistics for IAudioFlinger
 static auto& getIAudioFlingerStatistics() {
@@ -4750,6 +4754,83 @@ status_t AudioFlinger::getAudioMixPort(const struct audio_port_v7 *devicePort,
     return mPatchPanel->getAudioMixPort_l(devicePort, mixPort);
 }
 
+String8 AudioFlinger::getDevs(bool input) const
+{
+    status_t ret = initCheck();
+    if (ret != NO_ERROR) {
+        return String8("");
+    }
+    audio_utils::lock_guard lock(hardwareMutex());
+    if (mPrimaryHardwareDev == nullptr) {
+        return String8("");
+    }
+    String8 s;
+    AudioHwDevice *dev = mPrimaryHardwareDev.load();
+    mHardwareStatus = AUDIO_HW_GET_DEVS;
+    ret = dev->hwDevice()->getDevs(input, &s);
+    mHardwareStatus = AUDIO_HW_IDLE;
+
+    return ret == OK ? s : String8("");
+}
+
+status_t AudioFlinger::setDevVolume(bool input, const String8& devName, float volume) const
+{
+    status_t ret = initCheck();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    audio_utils::lock_guard lock(hardwareMutex());
+    if (mPrimaryHardwareDev == nullptr) {
+        return -ENODEV;
+    }
+    AudioHwDevice *dev = mPrimaryHardwareDev.load();
+    mHardwareStatus = AUDIO_HW_SET_DEV_VOLUME;
+    ret = dev->hwDevice()->setDevVolume(input, devName, volume);
+    mHardwareStatus = AUDIO_HW_IDLE;
+
+    return ret == OK ? NO_ERROR : -ENODEV;
+}
+
+status_t AudioFlinger::setDevMute(bool input, const String8& devName, bool mute) const
+{
+    status_t ret = initCheck();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    audio_utils::lock_guard lock(hardwareMutex());
+    if (mPrimaryHardwareDev == nullptr) {
+        return -ENODEV;
+    }
+    AudioHwDevice *dev = mPrimaryHardwareDev.load();
+    mHardwareStatus = AUDIO_HW_SET_DEV_MUTE;
+    ret = dev->hwDevice()->setDevMute(input, devName, mute);
+    mHardwareStatus = AUDIO_HW_IDLE;
+
+    return ret == OK ? NO_ERROR : -ENODEV;
+}
+
+String8 AudioFlinger::setDefaultDev(bool input, const String8& devName, bool needInfo) const
+{
+    status_t ret = initCheck();
+    if (ret != NO_ERROR) {
+        return String8("");
+    }
+
+    audio_utils::lock_guard lock(hardwareMutex());
+    if (mPrimaryHardwareDev == nullptr) {
+        return String8("");
+    }
+    String8 s;
+    mHardwareStatus = AUDIO_HW_SET_DEFAULT_DEV;
+    AudioHwDevice *dev = mPrimaryHardwareDev.load();
+    ret = dev->hwDevice()->setDefaultDev(input, devName, needInfo, &s);
+    mHardwareStatus = AUDIO_HW_IDLE;
+
+    return ret == OK ? s : String8("");
+}
+
 // ----------------------------------------------------------------------------
 
 status_t AudioFlinger::onTransactWrapper(TransactionCode code,
@@ -4802,9 +4883,9 @@ status_t AudioFlinger::onTransactWrapper(TransactionCode code,
 
     // make sure the following transactions come from system components
     switch (code) {
-        case TransactionCode::SET_MASTER_VOLUME:
-        case TransactionCode::SET_MASTER_MUTE:
-        case TransactionCode::MASTER_MUTE:
+        //case TransactionCode::SET_MASTER_VOLUME:
+        //case TransactionCode::SET_MASTER_MUTE:
+        //case TransactionCode::MASTER_MUTE:
         case TransactionCode::GET_SOUND_DOSE_INTERFACE:
         case TransactionCode::SET_MODE:
         case TransactionCode::SET_MIC_MUTE:

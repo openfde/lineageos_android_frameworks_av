@@ -148,6 +148,10 @@ class DeviceHalHidl : public DeviceHalInterface, public CoreConversionHelperHidl
 
     status_t getAudioMixPort(const struct audio_port_v7* devicePort,
                              struct audio_port_v7* mixPort) override;
+    status_t getDevs(bool input, String8 *result) override;
+    status_t setDevVolume(bool input, const String8& devName, float volume) override;
+    status_t setDevMute(bool input, const String8& devName, bool mute) override;
+    status_t setDefaultDev(bool input, const String8& devName, bool needInfo, String8 *result) override;
 
   private:
     friend class DevicesFactoryHalHidl;

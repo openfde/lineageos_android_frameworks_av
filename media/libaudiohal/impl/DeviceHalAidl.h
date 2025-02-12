@@ -184,6 +184,11 @@ class DeviceHalAidl : public DeviceHalInterface, public ConversionHelperAidl,
 
     status_t dump(int __unused, const Vector<String16>& __unused) override;
 
+    status_t getDevs(bool input, String8 *result) override;
+    status_t setDevVolume(bool input, const String8& devName, float volume) override;
+    status_t setDevMute(bool input, const String8& devName, bool mute) override;
+    status_t setDefaultDev(bool input, const String8& devName, bool needInfo, String8 *result) override;
+
   private:
     friend class sp<DeviceHalAidl>;
 

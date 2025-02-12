@@ -306,6 +306,53 @@ status_t DeviceHalAidl::getInputBufferSize(struct audio_config* config, size_t* 
     return OK;
 }
 
+status_t DeviceHalAidl::getDevs(bool input, String8 *result) {
+    ALOGD("%p %s::%s", this, getClassName().c_str(), __func__);
+    TIME_CHECK();
+    if (mModule == nullptr) return NO_INIT;
+    if (result == nullptr) {
+        return BAD_VALUE;
+    }
+    std::string info;
+    status_t rett = statusTFromBinderStatus(mModule->getDevs(input, &info));
+    result->setTo(info.c_str());
+    return rett;
+}
+
+status_t DeviceHalAidl::setDevVolume(bool input, const String8& devName, float volume) {
+    ALOGD("%p %s::%s", this, getClassName().c_str(), __func__);
+    TIME_CHECK();
+    if (mModule == nullptr) return NO_INIT;
+    if (devName.empty()) {
+        return BAD_VALUE;
+    }
+    return statusTFromBinderStatus(mModule->setDevVolume(input, std::string(devName.c_str()), volume));
+}
+
+status_t DeviceHalAidl::setDevMute(bool input, const String8& devName, bool mute) {
+    ALOGD("%p %s::%s", this, getClassName().c_str(), __func__);
+    TIME_CHECK();
+    if (mModule == nullptr) return NO_INIT;
+    if (devName.empty()) {
+        return BAD_VALUE;
+    }
+    return statusTFromBinderStatus(mModule->setDevMute(input, std::string(devName.c_str()), mute));
+}
+
+status_t DeviceHalAidl::setDefaultDev(bool input, const String8& devName, bool needInfo, String8 *result) {
+    ALOGD("%p %s::%s", this, getClassName().c_str(), __func__);
+    TIME_CHECK();
+    if (mModule == nullptr) return NO_INIT;
+    if (result == nullptr || devName.empty()) {
+        return BAD_VALUE;
+    }
+    std::string info;
+    status_t rett = statusTFromBinderStatus(mModule->setDefaultDev(input, 
+        std::string(devName.c_str()), needInfo, &info));
+    result->setTo(info.c_str());
+    return rett;
+}
+
 namespace {
 
 class StreamCallbackBase {

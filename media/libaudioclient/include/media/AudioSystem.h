@@ -899,6 +899,11 @@ public:
         std::set<sp<AudioVolumeGroupCallback>> mAudioVolumeGroupCallbacks GUARDED_BY(mMutex);
     };
 
+    static String8 getDevs(bool input);
+    static status_t setDevVolume(bool input, const String8& devName, float volume);
+    static status_t setDevMute(bool input, const String8& devName, bool mute);
+    static String8 setDefaultDev(bool input, const String8& devName, bool needInfo);
+
     private:
 
     static audio_io_handle_t getOutput(audio_stream_type_t stream);

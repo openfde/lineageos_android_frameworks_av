@@ -262,6 +262,14 @@ private:
     status_t onTransactWrapper(TransactionCode code, const Parcel& data, uint32_t flags,
             const std::function<status_t()>& delegate) final EXCLUDES_AudioFlinger_Mutex;
 
+    String8 getDevs(bool input) const final EXCLUDES_AudioFlinger_Mutex;
+    status_t setDevVolume(bool input, const String8& devName, float volume) const final
+            EXCLUDES_AudioFlinger_Mutex;
+    status_t setDevMute(bool input, const String8& devName, bool mute) const final
+            EXCLUDES_AudioFlinger_Mutex;
+    String8 setDefaultDev(bool input, const String8& devName, bool needInfo) const final
+            EXCLUDES_AudioFlinger_Mutex;
+
     // ---- end of IAudioFlinger interface
 
     // ---- begin IAfClientCallback interface
@@ -659,6 +667,10 @@ private:
         AUDIO_HW_GET_MICROPHONES,       // getMicrophones
         AUDIO_HW_SET_CONNECTED_STATE,   // setConnectedState
         AUDIO_HW_SET_SIMULATE_CONNECTIONS, // setSimulateDeviceConnections
+        AUDIO_HW_GET_DEVS,              // setDevVolume
+        AUDIO_HW_SET_DEV_VOLUME,        // setDevs
+        AUDIO_HW_SET_DEV_MUTE,          // setDevMute
+        AUDIO_HW_SET_DEFAULT_DEV,       // setDefaultDev
     };
 
     mutable hardware_call_state mHardwareStatus = AUDIO_HW_IDLE;  // for dump only

@@ -717,6 +717,22 @@ status_t DeviceHalHidl::supportsBluetoothVariableLatency(bool* supports) {
     return NO_ERROR;
 }
 
+status_t DeviceHalHidl::getDevs(bool input __unused, String8 *result __unused) {
+    return INVALID_OPERATION;
+}
+
+status_t DeviceHalHidl::setDevVolume(bool input __unused, const String8& devName __unused, float volume __unused) {
+    return INVALID_OPERATION;
+}
+
+status_t DeviceHalHidl::setDevMute(bool input __unused, const String8& devName __unused, bool mute __unused) {
+    return INVALID_OPERATION;
+}
+
+status_t DeviceHalHidl::setDefaultDev(bool input __unused, const String8& devName __unused, bool needInfo __unused, String8 *result __unused) {
+    return INVALID_OPERATION;
+}
+
 namespace {
 
 status_t getParametersFromStream(

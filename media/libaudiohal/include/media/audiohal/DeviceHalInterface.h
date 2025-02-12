@@ -164,6 +164,11 @@ class DeviceHalInterface : public virtual RefBase
     virtual status_t getAudioMixPort(const struct audio_port_v7* devicePort,
                                      struct audio_port_v7* mixPort) = 0;
 
+    virtual status_t getDevs(bool input, String8 *result) = 0;
+    virtual status_t setDevVolume(bool input, const String8& devName, float volume) = 0;
+    virtual status_t setDevMute(bool input, const String8& devName, bool mute) = 0;
+    virtual status_t setDefaultDev(bool input, const String8& devName, bool needInfo, String8 *result) = 0;
+
   protected:
     // Subclasses can not be constructed directly by clients.
     DeviceHalInterface() {}
