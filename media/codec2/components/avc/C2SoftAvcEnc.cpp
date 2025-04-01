@@ -33,12 +33,316 @@
 #include <Codec2BufferUtils.h>
 #include <SimpleC2Interface.h>
 #include <util/C2InterfaceHelper.h>
+#include <cutils/properties.h>
+#include <ui/GraphicBuffer.h>
 
 #include "C2SoftAvcEnc.h"
 #include "ih264e.h"
 #include "ih264e_error.h"
 
 namespace android {
+using openfde::C2GraphicBufferInfo;
+namespace {
+const GLfloat kPositionVertices[] = {
+    -1.0f, 1.0f,
+    -1.0f, -1.0f,
+    1.0f, -1.0f,
+    1.0f, 1.0f,
+};
+
+const GLfloat kYuvPositionVertices[] = {
+    0.0f, 1.0f,
+    0.0f, 0.0f,
+    1.0f, 0.0f,
+    1.0f, 1.0f,
+};
+
+const char *kVertSource =
+    "precision mediump float;\n"
+    "attribute vec2 in_position;\n"
+    "attribute vec2 in_texcoord;\n"
+    "varying vec2 texcoord;\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "   gl_Position = vec4(in_position, 0.0, 1.0);\n"
+    "   texcoord = in_texcoord;\n"
+    "}\n";
+
+const char *kFragSource =
+    "precision mediump float;\n"
+    "varying vec2 texcoord;\n"
+    "uniform sampler2D texture;\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "   gl_FragColor = texture2D(texture, texcoord);\n"
+    "}\n";
+
+const char *kVertSourceYuv =
+    "attribute vec4 vPosition;\n"
+    "attribute vec2 vYuvTexCoords;\n"
+    "varying vec2 yuvTexCoords;\n"
+    "void main() {\n"
+    "  yuvTexCoords = vYuvTexCoords;\n"
+    "  gl_Position = vPosition;\n"
+    "}\n";
+
+const char *kFragSourceYuv =
+    "#extension GL_OES_EGL_image_external : require\n"
+    "precision mediump float;\n"
+    "uniform samplerExternalOES yuvTexSampler;\n"
+    "varying vec2 yuvTexCoords;\n"
+    "void main() {\n"
+    "  gl_FragColor = texture2D(yuvTexSampler, yuvTexCoords);\n"
+    "}\n";
+
+static __attribute__((no_sanitize("integer")))
+void ConvertRGB32ToPlanar(
+    uint8_t *dstY, size_t dstStride, size_t dstVStride, const uint8_t *src,
+    size_t width, size_t height, size_t srcStride,bool bgr) {
+    CHECK((width & 1) == 0);
+    CHECK((height & 1) == 0);
+
+    uint8_t *dstU = dstY + dstStride * dstVStride;
+    uint8_t *dstV = dstU + (dstStride >> 1) * (dstVStride >> 1);
+
+    #ifdef SURFACE_IS_BGR32
+    bgr = !bgr;
+    #endif
+
+    const size_t redOffset   = bgr ? 2 : 0;
+    const size_t greenOffset = 1;
+    const size_t blueOffset  = bgr ? 0 : 2;
+
+    for (size_t y = 0; y < height; ++y) {
+        for (size_t x = 0; x < width; ++x) {
+            unsigned red   = src[redOffset];
+            unsigned green = src[greenOffset];
+            unsigned blue  = src[blueOffset];
+
+            // Using ITU-R BT.601-7 (03/2011)
+            //   2.5.1: Ey'  = ( 0.299*R + 0.587*G + 0.114*B)
+            //   2.5.2: ECr' = ( 0.701*R - 0.587*G - 0.114*B) / 1.402
+            //          ECb' = (-0.299*R - 0.587*G + 0.886*B) / 1.772
+            //   2.5.3: Y  = 219 * Ey'  +  16
+            //          Cr = 224 * ECr' + 128
+            //          Cb = 224 * ECb' + 128
+
+            unsigned luma =
+                ((red * 65 + green * 129 + blue * 25 + 128) >> 8) + 16;
+
+            dstY[x] = luma;
+
+            if ((x & 1) == 0 && (y & 1) == 0) {
+                unsigned U =
+                    ((-red * 38 - green * 74 + blue * 112 + 128) >> 8) + 128;
+
+                unsigned V =
+                    ((red * 112 - green * 94 - blue * 18 + 128) >> 8) + 128;
+
+                dstU[x >> 1] = U;
+                dstV[x >> 1] = V;
+            }
+            src += 4;
+        }
+
+        if ((y & 1) == 0) {
+            dstU += dstStride >> 1;
+            dstV += dstStride >> 1;
+        }
+
+        src += srcStride - 4 * width;
+        dstY += dstStride;
+    }
+}
+
+static const char *eglStrError(EGLint err){
+    switch (err){
+        case EGL_SUCCESS:           return "EGL_SUCCESS";
+        case EGL_NOT_INITIALIZED:   return "EGL_NOT_INITIALIZED";
+        case EGL_BAD_ACCESS:        return "EGL_BAD_ACCESS";
+        case EGL_BAD_ALLOC:         return "EGL_BAD_ALLOC";
+        case EGL_BAD_ATTRIBUTE:     return "EGL_BAD_ATTRIBUTE";
+        case EGL_BAD_CONFIG:        return "EGL_BAD_CONFIG";
+        case EGL_BAD_CONTEXT:       return "EGL_BAD_CONTEXT";
+        case EGL_BAD_CURRENT_SURFACE: return "EGL_BAD_CURRENT_SURFACE";
+        case EGL_BAD_DISPLAY:       return "EGL_BAD_DISPLAY";
+        case EGL_BAD_MATCH:         return "EGL_BAD_MATCH";
+        case EGL_BAD_NATIVE_PIXMAP: return "EGL_BAD_NATIVE_PIXMAP";
+        case EGL_BAD_NATIVE_WINDOW: return "EGL_BAD_NATIVE_WINDOW";
+        case EGL_BAD_PARAMETER:     return "EGL_BAD_PARAMETER";
+        case EGL_BAD_SURFACE:       return "EGL_BAD_SURFACE";
+        case EGL_CONTEXT_LOST:      return "EGL_CONTEXT_LOST";
+        default: return "UNKNOWN";
+    }
+}
+
+#if 0
+static void drawQuad(int x, int y, int w, int h) {
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    GLint program;
+
+    const GLfloat viewW = 0.5f * viewport[2];
+    const GLfloat viewH = 0.5f * viewport[3];
+    const GLfloat texW = 1.0f, texH = 1.0f;
+    const GLfloat quadX1 = x       / viewW - 1.0f, quadY1 = y       / viewH - 1.0f;
+    const GLfloat quadX2 = (x + w) / viewW - 1.0f, quadY2 = (y + h) / viewH - 1.0f;
+    const GLfloat texcoords[] =
+    {
+         0,       0,
+         0,       texH,
+         texW,    0,
+         texW,    texH
+    };
+
+    const GLfloat vertices[] =
+    {
+        quadX1, quadY1,
+        quadX1, quadY2,
+        quadX2, quadY1,
+        quadX2, quadY2,
+    };
+
+    glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+    GLint positionAttr = glGetAttribLocation(program, "in_position");
+    GLint texcoordAttr = glGetAttribLocation(program, "in_texcoord");
+
+    glVertexAttribPointer(positionAttr, 2, GL_FLOAT, GL_FALSE, 0, vertices);
+    glVertexAttribPointer(texcoordAttr, 2, GL_FLOAT, GL_FALSE, 0, texcoords);
+    glEnableVertexAttribArray(positionAttr);
+    glEnableVertexAttribArray(texcoordAttr);
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+#endif
+
+static GLint createProgram(const char* vs, const char* fs) {
+    GLint success = 0;
+    GLint logLength = 0;
+    char infoLog[1024];
+
+    GLint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vs, 0);
+    glCompileShader(vertexShader);
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(vertexShader, sizeof(infoLog), &logLength, infoLog);
+        ALOGE("Vertex shader compilation failed:\n%s\n", infoLog);
+    }
+
+    GLint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fs, 0);
+    glCompileShader(fragmentShader);
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(fragmentShader, sizeof(infoLog), &logLength, infoLog);
+        ALOGE("Fragment shader compilation failed:\n%s\n", infoLog);
+    }
+
+    GLint program = glCreateProgram();
+    glAttachShader(program, fragmentShader);
+    glAttachShader(program, vertexShader);
+    glLinkProgram(program);
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success)
+    {
+        glGetProgramInfoLog(program, sizeof(infoLog), &logLength, infoLog);
+        ALOGE("Program linking failed:\n%s\n", infoLog);
+    }
+
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    return program;
+}
+}
+
+void C2SoftAvcEnc::initEgl(size_t width, size_t height) {
+    if (mEglDisplay == EGL_NO_DISPLAY) {
+        ALOGV("initEgl width: %zu, height: %zu", width, height);
+
+        bool isYuv = true;
+        mEglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+        eglInitialize(mEglDisplay, nullptr, nullptr);
+        ALOGV("eglInitialize: %s", eglStrError(eglGetError()));
+
+        EGLConfig config;
+        int num_config;
+        EGLint dpy_attrs[] = {
+            EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+            EGL_RED_SIZE, 8,
+            EGL_GREEN_SIZE, 8,
+            EGL_BLUE_SIZE, 8,
+            EGL_ALPHA_SIZE, 8,
+            EGL_NONE };
+        eglChooseConfig(mEglDisplay, dpy_attrs, &config, 1, &num_config);
+        ALOGV("eglChooseConfig: %s", eglStrError(eglGetError()));
+
+        EGLint context_attrs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
+        mEglContext = eglCreateContext(mEglDisplay, config,  EGL_NO_CONTEXT, context_attrs);
+        ALOGV("eglCreateContext: %s", eglStrError(eglGetError()));
+
+        EGLint pbuf_attrs[] = { EGL_WIDTH, (EGLint)width, EGL_HEIGHT, (EGLint)height, EGL_NONE };
+        mEglSurface = eglCreatePbufferSurface(mEglDisplay, config, pbuf_attrs);
+        ALOGV("eglCreatePbufferSurface: %s", eglStrError(eglGetError()));
+
+        eglMakeCurrent(mEglDisplay, mEglSurface, mEglSurface, mEglContext);
+        ALOGV("eglMakeCurrent: %s", eglStrError(eglGetError()));
+        mProgram = createProgram(isYuv ? kVertSourceYuv : kVertSource, isYuv ? kFragSourceYuv : kFragSource);
+        glUseProgram(mProgram);
+        ALOGV("glUseProgram: %d", glGetError());
+        if (isYuv) {
+            mPosition = glGetAttribLocation(mProgram, "vPosition");
+            ALOGV("glGetAttribLocation: %s", eglStrError(eglGetError()));
+            mYuvPosition = glGetAttribLocation(mProgram, "vYuvTexCoords");
+            ALOGV("glGetAttribLocation: %s", eglStrError(eglGetError()));
+            mYuvTexSampler = glGetUniformLocation(mProgram, "yuvTexSampler");
+            ALOGV("glGetUniformLocation: %s", eglStrError(eglGetError()));
+            glVertexAttribPointer(mPosition, 2, GL_FLOAT, GL_FALSE, 0, kPositionVertices);
+            ALOGV("glVertexAttribPointer: %d", glGetError());
+            glEnableVertexAttribArray(mPosition);
+            ALOGV("glEnableVertexAttribArray: %d", glGetError());
+            glVertexAttribPointer(mYuvPosition, 2, GL_FLOAT, GL_FALSE, 0, kYuvPositionVertices);
+            ALOGV("glVertexAttribPointer: %d", glGetError());
+            glEnableVertexAttribArray(mYuvPosition);
+            ALOGV("glEnableVertexAttribArray: %d", glGetError());
+            glUniform1i(mYuvTexSampler, 0);
+            ALOGV("glUniform1i: %d", glGetError());
+            glViewport(0, 0, width, height);
+            ALOGV("glViewport: %s", eglStrError(eglGetError()));
+        }
+    }
+}
+
+void C2SoftAvcEnc::closeEgl() {
+    ALOGV("closeEgl isPowervr: %x", mIsPowervr);
+    if (mEglDisplay == EGL_NO_DISPLAY){
+       return;
+    }
+
+    if(mProgram != 0){
+        glDeleteProgram(mProgram);
+        mProgram = 0;
+    }
+
+    eglMakeCurrent(mEglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+    if (mEglSurface != EGL_NO_SURFACE)
+        eglDestroySurface(mEglDisplay, mEglSurface);
+    if (mEglContext != EGL_NO_CONTEXT)
+        eglDestroyContext(mEglDisplay, mEglContext);
+
+    eglTerminate(mEglDisplay);
+
+    mEglDisplay = EGL_NO_DISPLAY;
+    mEglSurface = EGL_NO_SURFACE;
+    mEglContext = EGL_NO_CONTEXT;
+}
 
 namespace {
 
@@ -1428,6 +1732,13 @@ c2_status_t C2SoftAvcEnc::initEncoder() {
     mSpsPpsHeaderReceived = false;
     mStarted = true;
 
+    char property[PROPERTY_VALUE_MAX];
+    if (!mIsPowervr && property_get("ro.hardware.egl", property, "default") > 0){
+        if ((strcmp(property, "powervr") == 0)) {
+            mIsPowervr = true;
+            ALOGV("powervr used");
+        }
+    }
     return C2_OK;
 }
 
@@ -1471,6 +1782,20 @@ c2_status_t C2SoftAvcEnc::releaseEncoder() {
     mCodecCtx = nullptr;
 
     mStarted = false;
+    if (mIsPowervr && (mEglDisplay != EGL_NO_DISPLAY)) {
+        closeEgl();
+        if(mShmData){
+            delete[] mShmData;
+            mShmData = nullptr;
+            ALOGE("mShmData deleted and seted to NULL");
+        }
+        if(mYuvData){
+            delete[] mYuvData;
+            mYuvData = nullptr;
+            ALOGE("mYuvData deleted and seted to NULL");
+        }
+        mIsPowervr = false;
+    }
 
     return C2_OK;
 }
@@ -1524,12 +1849,78 @@ c2_status_t C2SoftAvcEnc::setEncodeArgs(
     }
     ALOGV("width = %d, height = %d", input->width(), input->height());
     const C2PlanarLayout &layout = input->layout();
-    uint8_t *yPlane = const_cast<uint8_t *>(input->data()[C2PlanarLayout::PLANE_Y]);
-    uint8_t *uPlane = const_cast<uint8_t *>(input->data()[C2PlanarLayout::PLANE_U]);
-    uint8_t *vPlane = const_cast<uint8_t *>(input->data()[C2PlanarLayout::PLANE_V]);
-    int32_t yStride = layout.planes[C2PlanarLayout::PLANE_Y].rowInc;
-    int32_t uStride = layout.planes[C2PlanarLayout::PLANE_U].rowInc;
-    int32_t vStride = layout.planes[C2PlanarLayout::PLANE_V].rowInc;
+    uint8_t *yPlane;
+    uint8_t *uPlane;
+    uint8_t *vPlane;
+    int32_t yStride;
+    int32_t uStride;
+    int32_t vStride;
+    bool useEgl = false;
+    if (mIsPowervr && layout.type == C2PlanarLayout::TYPE_YUV) {
+        initEgl(input->width(), input->height());
+        const C2GraphicBufferInfo * graphicBufferInfo = (input->C2GraphicBufferInfo());
+
+        if (mEglDisplay != EGL_NO_DISPLAY) {
+            if(mShmData == nullptr){
+                mShmData = new GLubyte[input->width() * input->height() * 4];
+                ALOGV("mShmData seted size: %d", input->width() * input->height() * 4);
+            }
+            mYuvData = new GLubyte[input->width() * input->height() * 3 / 2];
+            ALOGV("mYuvData seted size: %d", input->width() * input->height() * 3 / 2);
+
+            sp<GraphicBuffer> imageGraphicBuffer = new GraphicBuffer(
+                graphicBufferInfo->nativeHandle, GraphicBuffer::WRAP_HANDLE, graphicBufferInfo->width,
+                graphicBufferInfo->height, graphicBufferInfo->format, graphicBufferInfo->layerCount/*outLayerCount*/,
+                graphicBufferInfo->grallocUsage, graphicBufferInfo->stride);
+
+            if (imageGraphicBuffer.get() == nullptr) {
+                ALOGE("Failed to allocate GraphicBuffer to wrap image handle");
+            }
+            EGLClientBuffer clientBuf = static_cast<EGLClientBuffer>(imageGraphicBuffer->getNativeBuffer());
+
+            auto image = eglCreateImageKHR(mEglDisplay, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, clientBuf, 0);
+            ALOGV("eglCreateImageKHR: %s", eglStrError(eglGetError()));
+
+            GLuint texture;
+            glGenTextures(1, &texture);
+            ALOGV("glGenTextures: %s", eglStrError(eglGetError()));
+            glBindTexture(GL_TEXTURE_EXTERNAL_OES, texture);
+            ALOGV("glBindTexture: %s", eglStrError(eglGetError()));
+            glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, (GLeglImageOES)image);
+            ALOGV("glEGLImageTargetTexture2DOES: %s", eglStrError(eglGetError()));
+
+            glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+            ALOGV("glDrawArrays: %s", eglStrError(eglGetError()));
+
+            glReadPixels(0, 0, input->width(), input->height(), GL_RGBA, GL_UNSIGNED_BYTE, mShmData);
+            ALOGV("glReadPixels: %s", eglStrError(eglGetError()));
+
+            ConvertRGB32ToPlanar(mYuvData, mSize->width, mSize->height, (const uint8_t *)mShmData, input->width(),
+                input->height(), graphicBufferInfo->stride * 4, graphicBufferInfo->format == HAL_PIXEL_FORMAT_BGRA_8888);
+
+            yPlane = mYuvData;
+            uPlane = yPlane + input->width() * input->height();
+            vPlane = uPlane + (input->width() >> 1) * (input->height() >> 1);
+            yStride = layout.planes[C2PlanarLayout::PLANE_Y].rowInc;
+            uStride = yStride / 2;
+            vStride = uStride;
+
+            glDeleteTextures(1, &texture);
+            eglDestroyImageKHR(mEglDisplay, image);
+            useEgl = true;
+        } else {
+            ALOGE("mEglDisplay not initialized.");
+        }
+    }
+
+    if (!useEgl) {
+        yPlane = const_cast<uint8_t *>(input->data()[C2PlanarLayout::PLANE_Y]);
+        uPlane = const_cast<uint8_t *>(input->data()[C2PlanarLayout::PLANE_U]);
+        vPlane = const_cast<uint8_t *>(input->data()[C2PlanarLayout::PLANE_V]);
+        yStride = layout.planes[C2PlanarLayout::PLANE_Y].rowInc;
+        uStride = layout.planes[C2PlanarLayout::PLANE_U].rowInc;
+        vStride = layout.planes[C2PlanarLayout::PLANE_V].rowInc;
+    }
 
     uint32_t width = mSize->width;
     uint32_t height = mSize->height;
@@ -1560,11 +1951,11 @@ c2_status_t C2SoftAvcEnc::setEncodeArgs(
                 return C2_BAD_VALUE;
             }
 
-            if (layout.planes[layout.PLANE_Y].colInc == 1
+            if (useEgl || (layout.planes[layout.PLANE_Y].colInc == 1
                     && layout.planes[layout.PLANE_U].colInc == 1
                     && layout.planes[layout.PLANE_V].colInc == 1
                     && uStride == vStride
-                    && yStride == 2 * vStride) {
+                    && yStride == 2 * vStride)) {
                 // I420 compatible - already set up above
                 break;
             }
@@ -1898,6 +2289,12 @@ void C2SoftAvcEnc::process(
             // Release input buffer reference
             mBuffers.erase(freed);
             mConversionBuffersInUse.erase(freed);
+            if (mIsPowervr) {
+                if(mYuvData){
+                    delete[] (GLubyte *)mYuvData;
+                    mYuvData = nullptr;
+                }
+            }
         }
     }
 

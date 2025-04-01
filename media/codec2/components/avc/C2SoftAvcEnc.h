@@ -27,6 +27,14 @@
 #include "ih264_typedefs.h"
 #include "ih264e.h"
 
+#define EGL_EGLEXT_PROTOTYPES
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#define GL_GLEXT_PROTOTYPES
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
+#include <EGL/eglplatform.h>
+
 namespace android {
 
 #define CODEC_MAX_CORES          4
@@ -208,6 +216,16 @@ private:
     std::map<const void *, std::shared_ptr<C2Buffer>> mBuffers;
     MemoryBlockPool mConversionBuffers;
     std::map<const void *, MemoryBlock> mConversionBuffersInUse;
+    bool mIsPowervr = false;
+    EGLDisplay mEglDisplay = EGL_NO_DISPLAY;
+    EGLContext mEglContext;
+    EGLSurface mEglSurface;
+    GLint mPosition;
+    GLint mYuvPosition;
+    GLint mYuvTexSampler;
+    GLubyte *mShmData = nullptr;
+    GLubyte *mYuvData = nullptr;
+    GLint mProgram;
 
     void initEncParams();
     c2_status_t initEncoder();
@@ -242,6 +260,8 @@ private:
     c2_status_t drainInternal(uint32_t drainMode,
             const std::shared_ptr<C2BlockPool> &pool,
             const std::unique_ptr<C2Work> &work);
+    void initEgl(size_t width, size_t height);
+    void closeEgl();
 
     C2_DO_NOT_COPY(C2SoftAvcEnc);
 };

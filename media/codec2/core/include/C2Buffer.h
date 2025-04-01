@@ -32,6 +32,20 @@ typedef void* C2Handle;
 
 #endif
 
+namespace openfde {
+
+typedef struct {
+    const native_handle_t * nativeHandle;
+    uint32_t width;
+    uint32_t height;
+    uint32_t format;
+    uint32_t layerCount;
+    uint64_t grallocUsage;
+    uint32_t stride;
+} C2GraphicBufferInfo;
+
+}
+
 /// \defgroup buffer Buffers
 /// @{
 
@@ -1883,7 +1897,7 @@ public:
      */
     virtual c2_status_t map(
             C2Rect rect, C2MemoryUsage usage, C2Fence *fence,
-            C2PlanarLayout *layout /* nonnull */, uint8_t **addr /* nonnull */) = 0;
+            C2PlanarLayout *layout /* nonnull */, uint8_t **addr /* nonnull */, openfde::C2GraphicBufferInfo *graphicBufferInfo = nullptr) = 0;
 
     /**
      * Unmaps a section of an allocation at |addr| with |rect|. These must be parameters previously
@@ -2006,6 +2020,8 @@ public:
      * \return error during the creation/mapping of this view.
      */
     c2_status_t error() const;
+
+    const openfde::C2GraphicBufferInfo *C2GraphicBufferInfo() const;
 
 protected:
     class Impl;

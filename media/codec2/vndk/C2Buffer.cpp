@@ -40,6 +40,7 @@ using android::ScopedTrace;
 using android::C2AllocatorBlob;
 using android::C2AllocatorGralloc;
 using android::C2AllocatorIon;
+using openfde::C2GraphicBufferInfo;
 
 namespace bufferpool = android::hardware::media::bufferpool;
 namespace bufferpool_impl = android::hardware::media::bufferpool::V2_0::implementation;
@@ -1299,7 +1300,8 @@ public:
                     { C2MemoryUsage::CPU_READ, writable ? C2MemoryUsage::CPU_WRITE : 0 },
                     nullptr,
                     &mLayout,
-                    mData);
+                    mData,
+                    &mC2GraphicBufferInfo);
             if (mError != C2_OK) {
                 memset(&mLayout, 0, sizeof(mLayout));
                 memset(mData, 0, sizeof(mData));
@@ -1355,6 +1357,7 @@ public:
         /** returns whether the mapping is writable */
         bool writable() const { return mWritable; }
 
+        const C2GraphicBufferInfo *C2GraphicBufferInfo() const { return &mC2GraphicBufferInfo; }
     private:
         const std::shared_ptr<_C2Block2DImpl> mImpl;
         bool mWritable;
@@ -1362,6 +1365,7 @@ public:
         uint8_t *mData[C2PlanarLayout::MAX_NUM_PLANES];
         uint8_t *mOffsetData[C2PlanarLayout::MAX_NUM_PLANES];
         C2PlanarLayout mLayout;
+        ::C2GraphicBufferInfo mC2GraphicBufferInfo;
     };
 
     /**
@@ -1468,6 +1472,10 @@ C2GraphicView C2GraphicView::subView(const C2Rect &rect) {
 
 c2_status_t C2GraphicView::error() const {
     return mImpl->mapping()->error();
+}
+
+const C2GraphicBufferInfo *C2GraphicView::C2GraphicBufferInfo() const {
+    return mImpl->mapping()->C2GraphicBufferInfo();
 }
 
 /**
