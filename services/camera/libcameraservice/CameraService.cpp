@@ -2234,7 +2234,7 @@ Status CameraService::connect(
             CameraThreadState::getCallingUid(),
             CameraThreadState::getCallingPid());
     }
-
+    property_set("openfde.last_app_use_camera", clientPackageName.c_str());
     return ret;
 }
 
@@ -2393,6 +2393,7 @@ Status CameraService::connectDevice(
             CameraThreadState::getCallingUid(),
             CameraThreadState::getCallingPid());
     }
+    property_set("openfde.last_app_use_camera", clientPackageName.c_str());
     return ret;
 }
 
