@@ -226,6 +226,7 @@ private:
     GLubyte *mShmData = nullptr;
     GLubyte *mYuvData = nullptr;
     GLint mProgram;
+    GLuint mOffscreenFramebuffer;
 
     void initEncParams();
     c2_status_t initEncoder();

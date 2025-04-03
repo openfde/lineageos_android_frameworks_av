@@ -57,6 +57,7 @@ const GLfloat kYuvPositionVertices[] = {
     1.0f, 1.0f,
 };
 
+/*
 const char *kVertSource =
     "precision mediump float;\n"
     "attribute vec2 in_position;\n"
@@ -78,6 +79,7 @@ const char *kFragSource =
     "{\n"
     "   gl_FragColor = texture2D(texture, texcoord);\n"
     "}\n";
+*/
 
 const char *kVertSourceYuv =
     "attribute vec4 vPosition;\n"
@@ -178,44 +180,6 @@ static const char *eglStrError(EGLint err){
     }
 }
 
-static void drawQuad(int x, int y, int w, int h) {
-    GLint viewport[4];
-    glGetIntegerv(GL_VIEWPORT, viewport);
-    GLint program;
-
-    const GLfloat viewW = 0.5f * viewport[2];
-    const GLfloat viewH = 0.5f * viewport[3];
-    const GLfloat texW = 1.0f, texH = 1.0f;
-    const GLfloat quadX1 = x       / viewW - 1.0f, quadY1 = y       / viewH - 1.0f;
-    const GLfloat quadX2 = (x + w) / viewW - 1.0f, quadY2 = (y + h) / viewH - 1.0f;
-    const GLfloat texcoords[] =
-    {
-         0,       0,
-         0,       texH,
-         texW,    0,
-         texW,    texH
-    };
-
-    const GLfloat vertices[] =
-    {
-        quadX1, quadY1,
-        quadX1, quadY2,
-        quadX2, quadY1,
-        quadX2, quadY2,
-    };
-
-    glGetIntegerv(GL_CURRENT_PROGRAM, &program);
-    GLint positionAttr = glGetAttribLocation(program, "in_position");
-    GLint texcoordAttr = glGetAttribLocation(program, "in_texcoord");
-
-    glVertexAttribPointer(positionAttr, 2, GL_FLOAT, GL_FALSE, 0, vertices);
-    glVertexAttribPointer(texcoordAttr, 2, GL_FLOAT, GL_FALSE, 0, texcoords);
-    glEnableVertexAttribArray(positionAttr);
-    glEnableVertexAttribArray(texcoordAttr);
-
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-}
-
 static GLint createProgram(const char* vs, const char* fs) {
     GLint success = 0;
     GLint logLength = 0;
@@ -290,9 +254,16 @@ void C2SoftAvcEnc::initEgl(size_t width, size_t height, bool isYuv) {
 
         eglMakeCurrent(mEglDisplay, mEglSurface, mEglSurface, mEglContext);
         ALOGV("eglMakeCurrent: %s", eglStrError(eglGetError()));
-        mProgram = createProgram(isYuv ? kVertSourceYuv : kVertSource, isYuv ? kFragSourceYuv : kFragSource);
-        glUseProgram(mProgram);
-        ALOGV("glUseProgram: %d", glGetError());
+        if (isYuv) {
+            mProgram = createProgram(kVertSourceYuv, kFragSourceYuv);
+            glUseProgram(mProgram);
+            ALOGV("glUseProgram: %d", glGetError());
+        } else {
+            glGenFramebuffers(1, &mOffscreenFramebuffer);
+            ALOGV("glGenFramebuffers: %d", glGetError());
+            glBindFramebuffer(GL_FRAMEBUFFER, mOffscreenFramebuffer);
+            ALOGV("glBindFramebuffer: %d", glGetError());
+        }
         if (isYuv) {
             mPosition = glGetAttribLocation(mProgram, "vPosition");
             ALOGV("glGetAttribLocation: %s", eglStrError(eglGetError()));
@@ -1889,8 +1860,8 @@ c2_status_t C2SoftAvcEnc::setEncodeArgs(
             glEGLImageTargetTexture2DOES(isYUV ? GL_TEXTURE_EXTERNAL_OES : GL_TEXTURE_2D, (GLeglImageOES)image);
             ALOGV("glEGLImageTargetTexture2DOES: %s", eglStrError(eglGetError()));
 
-            isYUV ? glDrawArrays(GL_TRIANGLE_FAN, 0, 4) : drawQuad(0, 0, input->width(), input->height());
-            ALOGV("glDrawArrays: %s", eglStrError(eglGetError()));
+            isYUV ? glDrawArrays(GL_TRIANGLE_FAN, 0, 4) : glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
+            ALOGV(isYUV ? "glDrawArrays: %s" : "glFramebufferTexture2D: %s", eglStrError(eglGetError()));
 
             glReadPixels(0, 0, input->width(), input->height(), GL_RGBA, GL_UNSIGNED_BYTE, mShmData);
             ALOGV("glReadPixels: %s", eglStrError(eglGetError()));
