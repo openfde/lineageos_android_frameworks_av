@@ -260,7 +260,7 @@ private:
     c2_status_t drainInternal(uint32_t drainMode,
             const std::shared_ptr<C2BlockPool> &pool,
             const std::unique_ptr<C2Work> &work);
-    void initEgl(size_t width, size_t height);
+    void initEgl(size_t width, size_t height, bool isYuv);
     void closeEgl();
 
     C2_DO_NOT_COPY(C2SoftAvcEnc);

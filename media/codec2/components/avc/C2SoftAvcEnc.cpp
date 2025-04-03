@@ -178,7 +178,6 @@ static const char *eglStrError(EGLint err){
     }
 }
 
-#if 0
 static void drawQuad(int x, int y, int w, int h) {
     GLint viewport[4];
     glGetIntegerv(GL_VIEWPORT, viewport);
@@ -216,7 +215,6 @@ static void drawQuad(int x, int y, int w, int h) {
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
-#endif
 
 static GLint createProgram(const char* vs, const char* fs) {
     GLint success = 0;
@@ -261,11 +259,10 @@ static GLint createProgram(const char* vs, const char* fs) {
 }
 }
 
-void C2SoftAvcEnc::initEgl(size_t width, size_t height) {
+void C2SoftAvcEnc::initEgl(size_t width, size_t height, bool isYuv) {
     if (mEglDisplay == EGL_NO_DISPLAY) {
         ALOGV("initEgl width: %zu, height: %zu", width, height);
 
-        bool isYuv = true;
         mEglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
         eglInitialize(mEglDisplay, nullptr, nullptr);
         ALOGV("eglInitialize: %s", eglStrError(eglGetError()));
@@ -1856,8 +1853,10 @@ c2_status_t C2SoftAvcEnc::setEncodeArgs(
     int32_t uStride;
     int32_t vStride;
     bool useEgl = false;
-    if (mIsPowervr && layout.type == C2PlanarLayout::TYPE_YUV) {
-        initEgl(input->width(), input->height());
+    if (mIsPowervr && (layout.type == C2PlanarLayout::TYPE_YUV
+        || layout.type == C2PlanarLayout::TYPE_RGB)) {
+        bool isYUV = layout.type == C2PlanarLayout::TYPE_YUV;
+        initEgl(input->width(), input->height(), isYUV);
         const C2GraphicBufferInfo * graphicBufferInfo = (input->C2GraphicBufferInfo());
 
         if (mEglDisplay != EGL_NO_DISPLAY) {
@@ -1877,19 +1876,20 @@ c2_status_t C2SoftAvcEnc::setEncodeArgs(
                 ALOGE("Failed to allocate GraphicBuffer to wrap image handle");
             }
             EGLClientBuffer clientBuf = static_cast<EGLClientBuffer>(imageGraphicBuffer->getNativeBuffer());
-
-            auto image = eglCreateImageKHR(mEglDisplay, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, clientBuf, 0);
+            EGLint imageAttrs[] = { EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE };
+            auto image = eglCreateImageKHR(mEglDisplay, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, clientBuf,
+                isYUV ? 0 : imageAttrs);
             ALOGV("eglCreateImageKHR: %s", eglStrError(eglGetError()));
 
             GLuint texture;
             glGenTextures(1, &texture);
             ALOGV("glGenTextures: %s", eglStrError(eglGetError()));
-            glBindTexture(GL_TEXTURE_EXTERNAL_OES, texture);
+            glBindTexture(isYUV ? GL_TEXTURE_EXTERNAL_OES : GL_TEXTURE_2D, texture);
             ALOGV("glBindTexture: %s", eglStrError(eglGetError()));
-            glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, (GLeglImageOES)image);
+            glEGLImageTargetTexture2DOES(isYUV ? GL_TEXTURE_EXTERNAL_OES : GL_TEXTURE_2D, (GLeglImageOES)image);
             ALOGV("glEGLImageTargetTexture2DOES: %s", eglStrError(eglGetError()));
 
-            glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+            isYUV ? glDrawArrays(GL_TRIANGLE_FAN, 0, 4) : drawQuad(0, 0, input->width(), input->height());
             ALOGV("glDrawArrays: %s", eglStrError(eglGetError()));
 
             glReadPixels(0, 0, input->width(), input->height(), GL_RGBA, GL_UNSIGNED_BYTE, mShmData);
@@ -1901,7 +1901,7 @@ c2_status_t C2SoftAvcEnc::setEncodeArgs(
             yPlane = mYuvData;
             uPlane = yPlane + input->width() * input->height();
             vPlane = uPlane + (input->width() >> 1) * (input->height() >> 1);
-            yStride = layout.planes[C2PlanarLayout::PLANE_Y].rowInc;
+            yStride = isYUV ? layout.planes[C2PlanarLayout::PLANE_Y].rowInc : mSize->width;
             uStride = yStride / 2;
             vStride = uStride;
 
@@ -1934,6 +1934,9 @@ c2_status_t C2SoftAvcEnc::setEncodeArgs(
             [[fallthrough]];
         case C2PlanarLayout::TYPE_RGBA: {
             ALOGV("yPlaneSize = %zu", yPlaneSize);
+            if (useEgl && (layout.type == C2PlanarLayout::TYPE_RGB)) {
+                break;
+            }
             MemoryBlock conversionBuffer = mConversionBuffers.fetch(yPlaneSize * 3 / 2);
             mConversionBuffersInUse.emplace(conversionBuffer.data(), conversionBuffer);
             yPlane = conversionBuffer.data();
