@@ -30,10 +30,12 @@
 #include <media/stagefright/MediaCodecConstants.h>
 #include <OMX_Video.h>
 #include <sys/stat.h>
+#include <android/hardware/ICameraService.h>
 
 #include <array>
 #include <string>
 #include <vector>
+using namespace android::hardware;
 
 namespace android {
 
@@ -83,6 +85,8 @@ std::array<char const*, 5> const& getXmlPaths() {
 Mutex MediaProfiles::sLock;
 bool MediaProfiles::sIsInitialized = false;
 MediaProfiles *MediaProfiles::sInstance = NULL;
+char *MediaProfiles::sRes = NULL;
+char *MediaProfiles::sFps = NULL;
 
 const MediaProfiles::NameToTagMap MediaProfiles::sVideoEncoderNameMap[] = {
     {"h263", VIDEO_ENCODER_H263},
@@ -470,10 +474,11 @@ MediaProfiles::createVideoCodec(const char **atts, size_t natts, MediaProfiles *
         }
     }
 
+    int maxFps = getMaxFps();
     VideoCodec videoCodec{
             static_cast<video_encoder>(codec),
             atoi(atts[3]) /* bitRate */, atoi(atts[5]) /* width */, atoi(atts[7]) /* height */,
-            atoi(atts[9]) /* frameRate */, profile, chroma, bitDepth, hdr };
+            maxFps ? maxFps : atoi(atts[9]) /* frameRate */, profile, chroma, bitDepth, hdr };
     logVideoCodec(videoCodec);
 
     size_t nCamcorderProfiles;
@@ -647,6 +652,10 @@ MediaProfiles::createCamcorderProfile(
       return nullptr;
     }
 
+    if (!qualitySupported(static_cast<camcorder_quality>(quality))) {
+        return nullptr;
+    }
+
     const size_t nFormatMappings = sizeof(sFileFormatMap)/sizeof(sFileFormatMap[0]);
     const int fileFormat = findTagForName(sFileFormatMap, nFormatMappings, atts[3]);
     if (fileFormat == -1) {
@@ -726,10 +735,16 @@ MediaProfiles::startElementHandler(void *userData, const char *name, const char 
     }
 
     MediaProfiles *profiles = (MediaProfiles *)userData;
+    static bool encoderProfileAdded = false;
     if (strcmp("Video", name) == 0) {
-        createVideoCodec(atts, natts, profiles);
+        if (encoderProfileAdded) {
+            createVideoCodec(atts, natts, profiles);
+        }
     } else if (strcmp("Audio", name) == 0) {
-        createAudioCodec(atts, natts, profiles);
+        if (encoderProfileAdded) {
+            createAudioCodec(atts, natts, profiles);
+            encoderProfileAdded = false;
+        }
     } else if (strcmp("VideoEncoderCap", name) == 0 &&
                natts >= 4 &&
                strcmp("true", atts[3]) == 0) {
@@ -768,6 +783,7 @@ MediaProfiles::startElementHandler(void *userData, const char *name, const char 
           profiles->mCurrentCameraId, atts, natts, profiles->mCameraIds);
       if (profile != nullptr) {
         profiles->mCamcorderProfiles.add(profile);
+        encoderProfileAdded = true;
       }
     } else if (strcmp("ImageEncoding", name) == 0) {
         profiles->addImageEncodingQualityLevel(profiles->mCurrentCameraId, atts, natts);
@@ -1210,6 +1226,37 @@ bool MediaProfiles::checkXmlFile(const char* xmlFile) {
     // TODO: Add validation
 }
 
+bool MediaProfiles::qualitySupported(camcorder_quality quality) {
+    if (sRes == NULL) {
+        ALOGE("sRes == NULL");
+        return false;
+    }
+    switch (quality) {
+        case CAMCORDER_QUALITY_1080P:
+            return strstr(sRes, "1920x1080") ? true : false;
+        case CAMCORDER_QUALITY_720P:
+            return strstr(sRes, "1280x720") ? true : false;
+        case CAMCORDER_QUALITY_480P:
+            return strstr(sRes, "640x480") ? true : false;
+        case CAMCORDER_QUALITY_QVGA:
+            return strstr(sRes, "320x240") ? true : false;
+        default:
+            return false;
+    }
+}
+
+int MediaProfiles::getMaxFps() {
+    if (sFps == NULL) {
+        ALOGE("sFps == NULL");
+        return 0;
+    }
+    if (strcmp(sFps, "none")) {
+        const char* lastComma = strrchr(sFps, ',');
+        return atoi((lastComma == nullptr) ? sFps : lastComma + 1);
+    }
+    return 0;
+}
+
 /*static*/ MediaProfiles*
 MediaProfiles::createInstanceFromXmlFile(const char *xml)
 {
@@ -1218,6 +1265,14 @@ MediaProfiles::createInstanceFromXmlFile(const char *xml)
 
     XML_Parser parser = ::XML_ParserCreate(NULL);
     CHECK(parser != NULL);
+
+    char res[PROPERTY_VALUE_MAX];
+    char fps[PROPERTY_VALUE_MAX];
+    property_get("fde.camera.res", res, "none");
+    property_get("fde.camera.fps", fps, "none");
+    ALOGV("res: %s, fps: %s", res, fps);
+    sRes = res;
+    sFps = fps;
 
     MediaProfiles *profiles = new MediaProfiles();
     ::XML_SetUserData(parser, profiles);
@@ -1260,6 +1315,8 @@ MediaProfiles::createInstanceFromXmlFile(const char *xml)
 exit:
     ::XML_ParserFree(parser);
     ::fclose(fp);
+    sRes = NULL;
+    sFps = NULL;
     return profiles;
 }
 
