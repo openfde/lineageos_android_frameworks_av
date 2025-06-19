@@ -652,7 +652,8 @@ MediaProfiles::createCamcorderProfile(
       return nullptr;
     }
 
-    if (!qualitySupported(static_cast<camcorder_quality>(quality))) {
+    if (!qualitySupported(static_cast<camcorder_quality>(quality)) && !((cameraIds.size() == 0)
+        && (static_cast<camcorder_quality>(quality) == CAMCORDER_QUALITY_1080P))) {
         return nullptr;
     }
 
