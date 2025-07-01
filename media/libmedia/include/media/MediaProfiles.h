@@ -433,6 +433,8 @@ private:
      */
     void checkAndAddRequiredProfilesIfNecessary();
 
+    static bool qualitySupported(camcorder_quality quality);
+    static int getMaxFps();
 
     // Mappings from name (for instance, codec name) to enum value
     static const NameToTagMap sVideoEncoderNameMap[];
@@ -469,6 +471,8 @@ private:
 
     RequiredProfiles *mRequiredProfileRefs;
     Vector<int>              mCameraIds;
+    static char *sRes;
+    static char *sFps;
 };
 
 }; // namespace android
