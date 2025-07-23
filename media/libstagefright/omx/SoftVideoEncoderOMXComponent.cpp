@@ -594,6 +594,7 @@ OMX_ERRORTYPE SoftVideoEncoderOMXComponent::internalGetParameter(
             bool isMesa = false;
             bool isPowervr = false;
             bool isEmulation = false;
+            bool isLeopard = false;
             if (property_get("ro.hardware.egl", property, "default") > 0){
                 if (strcmp(property, "mesa") == 0)
                     isMesa = true;
@@ -601,9 +602,11 @@ OMX_ERRORTYPE SoftVideoEncoderOMXComponent::internalGetParameter(
                     isPowervr = true;
                 if (strcmp(property, "emulation") == 0)
                     isEmulation = true;
+                if (strcmp(property, "LEOPARD") == 0)
+                    isLeopard = true;
             }
             ALOGE("fde mColorFormat: %x", mColorFormat);
-            if (!isMesa && !isPowervr && !isEmulation) {
+            if (!isMesa && !isPowervr && !isEmulation && !isLeopard) {
                 CHECK(mColorFormat == OMX_COLOR_FormatYUV420Planar ||
                         mColorFormat == OMX_COLOR_FormatYUV420SemiPlanar);
             }
