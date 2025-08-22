@@ -108,6 +108,7 @@ private:
 C2PlatformAllocatorStoreImpl::C2PlatformAllocatorStoreImpl() {
 }
 
+#define USE_LIBDMABUFHEAP 1
 static bool using_ion(void) {
     static int cached_result = []()->int {
         struct stat buffer;
@@ -130,6 +131,14 @@ static bool using_ion(void) {
             ALOGD("Using ION\n");
         else
             ALOGD("Using DMABUF Heaps\n");
+    #if USE_LIBDMABUFHEAP
+        char value[PROPERTY_VALUE_MAX];
+        property_get("ro.hardware.egl", value, "none");
+        if (strcmp(value, "powervr")) {
+            ret = 0;
+            ALOGD("Using DMABUF Heaps -> ION\n");
+        }
+    #endif
         return ret;
     }();
 
