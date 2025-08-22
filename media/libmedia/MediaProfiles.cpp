@@ -475,9 +475,19 @@ MediaProfiles::createVideoCodec(const char **atts, size_t natts, MediaProfiles *
     }
 
     int maxFps = getMaxFps();
+    int holdOrheight = 0;
+    int height = 0;
+    bool haveTwoRes = strchr(sRes, ',');
+    char egl[PROPERTY_VALUE_MAX];
+    property_get("ro.hardware.egl", egl, "none");
+    bool isMesaAndHaveCamera = (strcmp(egl, "mesa") == 0) && strcmp(sRes, "none");
+    if (isMesaAndHaveCamera) {
+        sscanf(sRes, haveTwoRes ? "512x%d,1024x%d" : "%dx%d", &holdOrheight, &height);
+    }
     VideoCodec videoCodec{
-            static_cast<video_encoder>(codec),
-            atoi(atts[3]) /* bitRate */, atoi(atts[5]) /* width */, atoi(atts[7]) /* height */,
+            static_cast<video_encoder>(codec), atoi(atts[3]) /* bitRate */,
+            isMesaAndHaveCamera ? (atoi(atts[5]) == 640 ?  512 : 1024) : atoi(atts[5]) /* width */,
+            isMesaAndHaveCamera ? (haveTwoRes ? (atoi(atts[5]) == 640 ?  holdOrheight : height) : height) : atoi(atts[7]) /* height */,
             maxFps ? maxFps : atoi(atts[9]) /* frameRate */, profile, chroma, bitDepth, hdr };
     logVideoCodec(videoCodec);
 
@@ -1236,9 +1246,9 @@ bool MediaProfiles::qualitySupported(camcorder_quality quality) {
         case CAMCORDER_QUALITY_1080P:
             return strstr(sRes, "1920x1080") ? true : false;
         case CAMCORDER_QUALITY_720P:
-            return strstr(sRes, "1280x720") ? true : false;
+            return strstr(sRes, "1280x720") || strstr(sRes, "1024x") ? true : false;
         case CAMCORDER_QUALITY_480P:
-            return strstr(sRes, "640x480") ? true : false;
+            return strstr(sRes, "640x480") || strstr(sRes, "512x") ? true : false;
         case CAMCORDER_QUALITY_QVGA:
             return strstr(sRes, "320x240") ? true : false;
         default:
