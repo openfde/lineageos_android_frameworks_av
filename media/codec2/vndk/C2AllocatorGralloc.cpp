@@ -564,6 +564,7 @@ static c2_status_t PopulatePlaneLayout(
         }
 
         case static_cast<uint32_t>(PixelFormat4::RGBA_8888):
+        case static_cast<uint32_t>(PixelFormat4::BGRA_8888):
             // TODO: alpha channel
             // fall-through
         case static_cast<uint32_t>(PixelFormat4::RGBX_8888): {
@@ -575,9 +576,10 @@ static c2_status_t PopulatePlaneLayout(
                 ALOGE("failed transaction: lock(RGBA_8888)");
                 return C2_CORRUPTED;
             }
-            addr[C2PlanarLayout::PLANE_R] = (uint8_t *)pointer;
+            bool isBGRA = format == HAL_PIXEL_FORMAT_BGRA_8888;
+            addr[C2PlanarLayout::PLANE_R] = (uint8_t *)pointer + (isBGRA ? 2 : 0);
             addr[C2PlanarLayout::PLANE_G] = (uint8_t *)pointer + 1;
-            addr[C2PlanarLayout::PLANE_B] = (uint8_t *)pointer + 2;
+            addr[C2PlanarLayout::PLANE_B] = (uint8_t *)pointer + (isBGRA ? 0 : 2);
             layout->type = C2PlanarLayout::TYPE_RGB;
             layout->numPlanes = 3;
             layout->rootPlanes = 1;
@@ -592,7 +594,7 @@ static c2_status_t PopulatePlaneLayout(
                 0,                              // rightShift
                 C2PlaneInfo::NATIVE,            // endianness
                 C2PlanarLayout::PLANE_R,        // rootIx
-                0,                              // offset
+                static_cast<uint32_t>(isBGRA ? 2 : 0),                              // offset
             };
             layout->planes[C2PlanarLayout::PLANE_G] = {
                 C2PlaneInfo::CHANNEL_G,         // channel
@@ -618,7 +620,7 @@ static c2_status_t PopulatePlaneLayout(
                 0,                              // rightShift
                 C2PlaneInfo::NATIVE,            // endianness
                 C2PlanarLayout::PLANE_R,        // rootIx
-                2,                              // offset
+                static_cast<uint32_t>(isBGRA ? 0 : 2),                              // offset
             };
             break;
         }
