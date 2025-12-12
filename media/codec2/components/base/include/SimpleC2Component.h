@@ -220,6 +220,8 @@ protected:
     C2ReadView mDummyReadView;
     int getHalPixelFormatForBitDepth10(bool allowRGBA1010102);
 
+    bool mIsMesa;
+
 private:
     const std::shared_ptr<C2ComponentInterface> mIntf;
 

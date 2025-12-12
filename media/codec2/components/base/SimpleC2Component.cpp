@@ -805,6 +805,9 @@ SimpleC2Component::SimpleC2Component(
     mLooper->setName(intf->getName().c_str());
     (void)mLooper->registerHandler(mHandler);
     mLooper->start(false, false, ANDROID_PRIORITY_VIDEO);
+    char egl[PROPERTY_VALUE_MAX];
+    property_get("ro.hardware.egl", egl, "none");
+    mIsMesa = strcmp(egl, "mesa") == 0;
 }
 
 SimpleC2Component::~SimpleC2Component() {
