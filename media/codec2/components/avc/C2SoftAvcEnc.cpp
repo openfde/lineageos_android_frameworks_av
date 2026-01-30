@@ -1701,10 +1701,13 @@ c2_status_t C2SoftAvcEnc::initEncoder() {
     mStarted = true;
 
     char property[PROPERTY_VALUE_MAX];
-    if (!mIsPowervr && property_get("ro.hardware.egl", property, "default") > 0){
+    if ((!mIsPowervr || !mIsFTG) && property_get("ro.hardware.egl", property, "default") > 0){
         if ((strcmp(property, "powervr") == 0)) {
             mIsPowervr = true;
             ALOGV("powervr used");
+        } else if (strcmp(property, "FTG340") == 0) {
+            mIsFTG = true;
+            ALOGV("FTG340 used");
         }
     }
     return C2_OK;
@@ -1750,7 +1753,7 @@ c2_status_t C2SoftAvcEnc::releaseEncoder() {
     mCodecCtx = nullptr;
 
     mStarted = false;
-    if (mIsPowervr && (mEglDisplay != EGL_NO_DISPLAY)) {
+    if ((mIsPowervr || mIsFTG) && (mEglDisplay != EGL_NO_DISPLAY)) {
         closeEgl();
         if(mShmData){
             delete[] mShmData;
@@ -1763,6 +1766,7 @@ c2_status_t C2SoftAvcEnc::releaseEncoder() {
             ALOGE("mYuvData deleted and seted to NULL");
         }
         mIsPowervr = false;
+        mIsFTG = false;
     }
 
     return C2_OK;
@@ -1824,8 +1828,8 @@ c2_status_t C2SoftAvcEnc::setEncodeArgs(
     int32_t uStride;
     int32_t vStride;
     bool useEgl = false;
-    if (mIsPowervr && (layout.type == C2PlanarLayout::TYPE_YUV
-        || layout.type == C2PlanarLayout::TYPE_RGB)) {
+    if ((mIsPowervr && (layout.type == C2PlanarLayout::TYPE_YUV || layout.type == C2PlanarLayout::TYPE_RGB))
+            || (mIsFTG && layout.type == C2PlanarLayout::TYPE_RGB)) {
         bool isYUV = layout.type == C2PlanarLayout::TYPE_YUV;
         initEgl(input->width(), input->height(), isYUV);
         const C2GraphicBufferInfo * graphicBufferInfo = (input->C2GraphicBufferInfo());
@@ -1837,9 +1841,8 @@ c2_status_t C2SoftAvcEnc::setEncodeArgs(
             }
             mYuvData = new GLubyte[input->width() * input->height() * 3 / 2];
             ALOGV("mYuvData seted size: %d", input->width() * input->height() * 3 / 2);
-
             sp<GraphicBuffer> imageGraphicBuffer = new GraphicBuffer(
-                graphicBufferInfo->nativeHandle, GraphicBuffer::WRAP_HANDLE, graphicBufferInfo->width,
+                graphicBufferInfo->nativeHandle, GraphicBuffer::CLONE_HANDLE, graphicBufferInfo->width,
                 graphicBufferInfo->height, graphicBufferInfo->format, graphicBufferInfo->layerCount/*outLayerCount*/,
                 graphicBufferInfo->grallocUsage, graphicBufferInfo->stride);
 
@@ -1933,7 +1936,6 @@ c2_status_t C2SoftAvcEnc::setEncodeArgs(
                 // I420 compatible - already set up above
                 break;
             }
-
             // copy to I420
             yStride = width;
             uStride = vStride = yStride / 2;
@@ -2263,7 +2265,7 @@ void C2SoftAvcEnc::process(
             // Release input buffer reference
             mBuffers.erase(freed);
             mConversionBuffersInUse.erase(freed);
-            if (mIsPowervr) {
+            if (mIsPowervr || mIsFTG) {
                 if(mYuvData){
                     delete[] (GLubyte *)mYuvData;
                     mYuvData = nullptr;

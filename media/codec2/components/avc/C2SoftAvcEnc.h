@@ -217,6 +217,7 @@ private:
     MemoryBlockPool mConversionBuffers;
     std::map<const void *, MemoryBlock> mConversionBuffersInUse;
     bool mIsPowervr = false;
+    bool mIsFTG = false;
     EGLDisplay mEglDisplay = EGL_NO_DISPLAY;
     EGLContext mEglContext;
     EGLSurface mEglSurface;
