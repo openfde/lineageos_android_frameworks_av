@@ -662,8 +662,7 @@ MediaProfiles::createCamcorderProfile(
       return nullptr;
     }
 
-    if (!qualitySupported(static_cast<camcorder_quality>(quality)) && !((cameraIds.size() == 0)
-        && (static_cast<camcorder_quality>(quality) == CAMCORDER_QUALITY_1080P))) {
+    if (!qualitySupported(static_cast<camcorder_quality>(quality)) && !strstr(sRes, "none")) {
         return nullptr;
     }
 
@@ -1279,6 +1278,17 @@ MediaProfiles::createInstanceFromXmlFile(const char *xml)
 
     char res[PROPERTY_VALUE_MAX];
     char fps[PROPERTY_VALUE_MAX];
+    property_get("fde.camera.fps", fps, "nonenone");
+    if (strcmp(fps, "nonenone") == 0) {
+        int tryCount = 180;
+        while (tryCount--) {
+            sleep(1);
+            property_get("fde.camera.fps", fps, "nonenone");
+            if (strcmp(fps, "nonenone")) {
+                break;
+            }
+        }
+    }
     property_get("fde.camera.res", res, "none");
     property_get("fde.camera.fps", fps, "none");
     ALOGV("res: %s, fps: %s", res, fps);
