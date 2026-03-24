@@ -1395,7 +1395,40 @@ status_t Parameters::set(const String8& paramString) {
             ALOGE("%s: Requested preview size %d x %d is not supported",
                     __FUNCTION__, validatedParams.previewWidth,
                     validatedParams.previewHeight);
-            return BAD_VALUE;
+
+            int targetWidth = validatedParams.previewWidth;
+            int targetHeight = validatedParams.previewHeight;
+            float targetRatio = (float) targetWidth / targetHeight;
+
+            Size bestSize = {0, 0};
+            float bestRatioDiff = std::numeric_limits<float>::max();
+            int bestResolutionDiff = std::numeric_limits<int>::max();
+            for (Size size : availablePreviewSizes) {
+                float ratio = (float) size.width / size.height;
+                float ratioDiff = std::abs(ratio - targetRatio);
+                // 先比较宽高比差异
+                if (ratioDiff < bestRatioDiff - 1e-6) {
+                    bestRatioDiff = ratioDiff;
+                    bestResolutionDiff = std::abs(size.width - targetWidth)
+                                            + std::abs(size.height - targetHeight);
+                    bestSize = size;
+                } else if (std::abs(ratioDiff - bestRatioDiff) < 1e-6) {
+                    // 宽高比相同，则选分辨率差异最小的
+                    int resolutionDiff = std::abs(size.width - targetWidth)
+                                            + std::abs(size.height - targetHeight);
+                    if (resolutionDiff < bestResolutionDiff) {
+                        bestResolutionDiff = resolutionDiff;
+                        bestSize = size;
+                    }
+                }
+            }
+            if (bestSize.width != 0 && bestSize.height != 0) {
+                newParams.setPreviewSize(bestSize.width, bestSize.height);
+                validatedParams.previewWidth = bestSize.width;
+                validatedParams.previewHeight = bestSize.height;
+                ALOGD("%s: Force Update preview size : %d x %d",
+                        __FUNCTION__, bestSize.width, bestSize.height);
+            }
         }
     }
 
