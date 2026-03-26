@@ -494,6 +494,7 @@ private:
     };
 
     int getCamcorderProfileIndex(int cameraId, camcorder_quality quality) const;
+    int getCamcorderProfileIndexMulti(int cameraId, camcorder_quality quality) const;
     void initRequiredProfileRefs(const Vector<int>& cameraIds);
     int getRequiredProfileRefIndex(int cameraId);
 
@@ -616,8 +617,10 @@ private:
      */
     void checkAndAddRequiredProfilesIfNecessary();
 
-    static bool qualitySupported(camcorder_quality quality);
+    static bool qualitySupported(camcorder_quality quality, std::string info = "");
     static int getMaxFps();
+    static void maybeUpdateCameraInfo(MediaProfiles* profiles);
+    static void updateCameraInfo(MediaProfiles* profiles);
 
     // Mappings from name (for instance, codec name) to enum value
     static const NameToTagMap sVideoEncoderNameMap[];
@@ -635,6 +638,7 @@ private:
     int mCurrentCameraId;
 
     Vector<CamcorderProfile*> mCamcorderProfiles;
+    Vector<CamcorderProfile*> mDefalutCamcorderProfiles;
     Vector<AudioEncoderCap*>  mAudioEncoders;
     Vector<VideoEncoderCap*>  mVideoEncoders;
     Vector<AudioDecoderCap*>  mAudioDecoders;
@@ -654,10 +658,9 @@ private:
         int mCameraId;
     } RequiredProfiles;
 
-    RequiredProfiles *mRequiredProfileRefs;
+    RequiredProfiles *mRequiredProfileRefs = nullptr;
     Vector<int>              mCameraIds;
-    static char *sRes;
-    static char *sFps;
+    static std::string sCameraInfo;
 };
 
 }; // namespace android
