@@ -2551,7 +2551,8 @@ status_t Parameters::getDefaultFocalLength(CameraDeviceBase *device) {
     camera_metadata_ro_entry_t hwLevel = staticInfo(ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL);
     if (!hwLevel.count) return NO_INIT;
     fastInfo.isExternalCamera =
-            hwLevel.data.u8[0] == ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_EXTERNAL;
+            hwLevel.data.u8[0] == ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_EXTERNAL
+            || hwLevel.data.u8[0] == ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED;
 
     camera_metadata_ro_entry_t availableFocalLengths =
         staticInfo(ANDROID_LENS_INFO_AVAILABLE_FOCAL_LENGTHS, 0, 0, /*required*/false);
@@ -3220,8 +3221,8 @@ Vector<Parameters::Size> Parameters::getAvailableJpegSizes() {
     Vector<StreamConfiguration> scs = getStreamConfigurations();
     for (size_t i = 0; i < scs.size(); i++) {
         const StreamConfiguration &sc = scs[i];
-        if (sc.isInput == ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT &&
-                sc.format == HAL_PIXEL_FORMAT_BLOB) {
+        if (sc.isInput == ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT && (
+                sc.format == HAL_PIXEL_FORMAT_BLOB || sc.format == HAL_PIXEL_FORMAT_YCBCR_420_888)) {
             Size sz = {sc.width, sc.height};
             jpegSizes.add(sz);
         }

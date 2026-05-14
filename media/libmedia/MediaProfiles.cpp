@@ -89,11 +89,19 @@ std::tuple<int, int, int> parseCameraInfo(camcorder_quality quality, std::string
     std::smatch match;
     switch (quality) {
         case CAMCORDER_QUALITY_1080P:
-            width = 1920;
-            height = 1080;
-            capturePattern = R"(1920x1080@(\d+))";
-            std::regex_search(info, match, capturePattern);
-            maxFps = std::stoi(match[1]);
+            if (info.find("1920x1080") != std::string::npos) {
+                width = 1920;
+                height = 1080;
+                capturePattern = R"(1920x1080@(\d+))";
+                std::regex_search(info, match, capturePattern);
+                maxFps = std::stoi(match[1]);
+            } else {
+                width = 1536;
+                capturePattern = R"(1536x(\d+)@(\d+))";
+                std::regex_search(info, match, capturePattern);
+                height = std::stoi(match[1]);
+                maxFps = std::stoi(match[2]);
+            }
             break;
         case CAMCORDER_QUALITY_720P:
             if (info.find("1280x720") != std::string::npos) {
@@ -1381,7 +1389,7 @@ bool MediaProfiles::qualitySupported(camcorder_quality quality, std::string info
     }
     switch (quality) {
         case CAMCORDER_QUALITY_1080P:
-            return input.find("1920x1080") != std::string::npos ? true : false;
+            return input.find("1920x1080") != std::string::npos || input.find("1536x") != std::string::npos ? true : false;
         case CAMCORDER_QUALITY_720P:
             return input.find("1280x720") != std::string::npos || input.find("1024x") != std::string::npos ? true : false;
         case CAMCORDER_QUALITY_480P:
