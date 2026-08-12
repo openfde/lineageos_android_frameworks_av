@@ -20,6 +20,13 @@
 #include <sys/time.h>
 #include <inttypes.h>
 
+#include <C2ParamDef.h>
+
+enum C2CustomParamIndex : uint32_t {
+    kParamIndexAppPid = C2Param::TYPE_INDEX_VENDOR_START + 0x100,
+};
+
+typedef C2GlobalParam<C2Tuning, C2Int32Value, kParamIndexAppPid> C2StreamAppPidInfo;
 #include <media/stagefright/foundation/ColorUtils.h>
 
 #include <atomic>
@@ -137,6 +144,7 @@ private:
     status_t resetDecoder();
     void resetPlugin();
     status_t deleteDecoder();
+    std::string getAppNameByPid(int32_t pid);
 
     std::shared_ptr<IntfImpl> mIntf;
 
@@ -152,6 +160,7 @@ private:
     iv_obj_t *mDecHandle;
     std::shared_ptr<C2GraphicBlock> mOutBlock;
     uint8_t *mOutBufferFlush;
+    std::string mAppName{""};
 
     size_t mNumCores;
     IV_COLOR_FORMAT_T mIvColorFormat;
