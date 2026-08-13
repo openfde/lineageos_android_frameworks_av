@@ -24,6 +24,8 @@
 #include <C2PlatformSupport.h>
 #include <Codec2Mapper.h>
 #include <SimpleC2Interface.h>
+#include <android/binder_ibinder.h>
+#include <fstream>
 
 #include "C2SoftAvcDec.h"
 
@@ -55,6 +57,13 @@ public:
         noOutputReferences();
         noInputLatency();
         noTimeStretch();
+
+        addParameter(
+        DefineParam(mAppPid, "vendor.app-pid")
+        .withDefault(new C2StreamAppPidInfo(0))
+        .withFields({C2F(mAppPid, value).any()})
+        .withSetter(AppPidSetter)
+        .build());
 
         // TODO: Proper support for reorder depth.
         addParameter(
@@ -296,6 +305,16 @@ public:
         return mColorAspects;
     }
 
+    static C2R AppPidSetter(bool mayBlock, C2P<C2StreamAppPidInfo> &me) {
+        (void)mayBlock;
+        ALOGW("AppPidSetter me.v.value = %d", me.v.value);
+        me.set().value = me.v.value;
+        return C2R::Ok();
+    }
+
+    int32_t getAppPid_l() const {
+        return mAppPid ? mAppPid->value : 0;
+    }
 private:
     std::shared_ptr<C2StreamProfileLevelInfo::input> mProfileLevel;
     std::shared_ptr<C2StreamPictureSizeInfo::output> mSize;
@@ -306,6 +325,7 @@ private:
     std::shared_ptr<C2StreamColorAspectsTuning::output> mDefaultColorAspects;
     std::shared_ptr<C2StreamColorAspectsInfo::output> mColorAspects;
     std::shared_ptr<C2StreamPixelFormatInfo::output> mPixelFormat;
+    std::shared_ptr<C2StreamAppPidInfo> mAppPid;
 };
 
 static size_t getCpuCoreCount() {
@@ -353,8 +373,34 @@ C2SoftAvcDec::~C2SoftAvcDec() {
     onRelease();
 }
 
+std::string C2SoftAvcDec::getAppNameByPid(int32_t pid) {
+    if (pid <= 0) return "";
+
+    std::string path = "/proc/" + std::to_string(pid) + "/cmdline";
+    std::ifstream cmdlineFile(path);
+    std::string appName;
+
+    if (cmdlineFile.is_open()) {
+        std::getline(cmdlineFile, appName, '\0');
+        cmdlineFile.close();
+    }
+
+    if (appName.empty()) {
+        appName = "unknown_app";
+    }
+
+    return appName;
+}
 c2_status_t C2SoftAvcDec::onInit() {
     status_t err = initDecoder();
+    int32_t appPid = 0;
+    {
+        IntfImpl::Lock lock = mIntf->lock();
+        appPid = mIntf->getAppPid_l();
+    }
+    mAppName = getAppNameByPid(appPid);
+    ALOGE("[AppTracker_ThreadSafe] C2SoftAvcDec C2SoftAvcDec::onInit %p initialized for App Name: %s, App PID: %d",
+          this, mAppName.c_str(), appPid);
     return err == OK ? C2_OK : C2_CORRUPTED;
 }
 
@@ -712,6 +758,58 @@ static void fillEmptyWork(const std::unique_ptr<C2Work> &work) {
 }
 
 void C2SoftAvcDec::finishWork(uint64_t index, const std::unique_ptr<C2Work> &work) {
+    if (mOutBlock && mAppName == "com.oray.sunlogin") {
+        ALOGD("C2SoftAvcDec::finishWork package name detected mAppName: %s", mAppName.c_str());
+        C2GraphicView wView = mOutBlock->map().get();
+        if (wView.error() == C2_OK) {
+            uint32_t stride = wView.layout().planes[C2PlanarLayout::PLANE_Y].rowInc;
+            if (stride > mWidth + 16) {
+                ALOGD("[C2SoftAvcDec] %u -> %u", mWidth, stride);
+
+                uint8_t* yPlane = wView.data()[C2PlanarLayout::PLANE_Y];
+                uint8_t* uPlane = wView.data()[C2PlanarLayout::PLANE_U];
+                uint8_t* vPlane = wView.data()[C2PlanarLayout::PLANE_V];
+
+                const uint32_t halfStride = stride / 2;
+                const uint32_t halfWidth  = (mWidth + 1) / 2;
+
+                for (uint32_t y = 0; y < mHeight; ++y) {
+                    uint8_t* line = yPlane + y * stride;
+                    uint8_t temp[4096];
+                    memcpy(temp, line, mWidth);
+
+                    for (uint32_t x = 0; x < stride; ++x) {
+                        uint32_t srcX = (x * (uint64_t)mWidth) / stride;
+                        int x0 = srcX;
+                        int x1 = std::min(x0 + 1, (int)mWidth - 1);
+                        uint32_t weight = ((x * (uint64_t)mWidth) % stride) * 256 / stride;
+                        line[x] = (uint8_t)(((uint16_t)temp[x0] * (256 - weight) +
+                                           (uint16_t)temp[x1] * weight) >> 8);
+                    }
+                }
+
+                for (uint32_t y = 0; y < mHeight / 2; ++y) {
+                    uint8_t* uLine = uPlane + y * halfStride;
+                    uint8_t* vLine = vPlane + y * halfStride;
+                    uint8_t uTemp[2048], vTemp[2048];
+                    memcpy(uTemp, uLine, halfWidth);
+                    memcpy(vTemp, vLine, halfWidth);
+
+                    for (uint32_t x = 0; x < halfStride; ++x) {
+                        uint32_t srcX = (x * (uint64_t)halfWidth) / halfStride;
+                        int x0 = srcX;
+                        int x1 = std::min(x0 + 1, (int)halfWidth - 1);
+                        uint32_t weight = ((x * (uint64_t)halfWidth) % halfStride) * 256 / halfStride;
+
+                        uLine[x] = (uint8_t)(((uint16_t)uTemp[x0] * (256 - weight) +
+                                            (uint16_t)uTemp[x1] * weight) >> 8);
+                        vLine[x] = (uint8_t)(((uint16_t)vTemp[x0] * (256 - weight) +
+                                            (uint16_t)vTemp[x1] * weight) >> 8);
+                    }
+                }
+            }
+        }
+    }
     std::shared_ptr<C2Buffer> buffer = createGraphicBuffer(std::move(mOutBlock),
                                                            C2Rect(mWidth, mHeight));
     mOutBlock = nullptr;
