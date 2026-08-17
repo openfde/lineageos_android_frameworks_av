@@ -4883,9 +4883,9 @@ status_t AudioFlinger::onTransactWrapper(TransactionCode code,
 
     // make sure the following transactions come from system components
     switch (code) {
-        //case TransactionCode::SET_MASTER_VOLUME:
-        //case TransactionCode::SET_MASTER_MUTE:
-        //case TransactionCode::MASTER_MUTE:
+        case TransactionCode::SET_MASTER_VOLUME:
+        case TransactionCode::SET_MASTER_MUTE:
+        case TransactionCode::MASTER_MUTE:
         case TransactionCode::GET_SOUND_DOSE_INTERFACE:
         case TransactionCode::SET_MODE:
         case TransactionCode::SET_MIC_MUTE:
