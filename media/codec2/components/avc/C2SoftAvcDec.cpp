@@ -758,53 +758,61 @@ static void fillEmptyWork(const std::unique_ptr<C2Work> &work) {
 }
 
 void C2SoftAvcDec::finishWork(uint64_t index, const std::unique_ptr<C2Work> &work) {
-    if (mOutBlock && mAppName == "com.oray.sunlogin") {
+    const uint32_t alignW = ALIGN32(mWidth);
+    if (mOutBlock && (mAppName == "com.oray.sunlogin") && (mEglPlatform == "FTG340") && (alignW > mWidth)) {
         ALOGD("C2SoftAvcDec::finishWork package name detected mAppName: %s", mAppName.c_str());
         C2GraphicView wView = mOutBlock->map().get();
         if (wView.error() == C2_OK) {
-            uint32_t stride = wView.layout().planes[C2PlanarLayout::PLANE_Y].rowInc;
-            if (stride > mWidth + 16) {
-                ALOGD("[C2SoftAvcDec] %u -> %u", mWidth, stride);
-
+            const uint32_t yRowInc = wView.layout().planes[C2PlanarLayout::PLANE_Y].rowInc;
+            const uint32_t uRowInc = wView.layout().planes[C2PlanarLayout::PLANE_U].rowInc;
+            const uint32_t vRowInc = wView.layout().planes[C2PlanarLayout::PLANE_V].rowInc;
+            if (alignW <= yRowInc && alignW / 2 <= uRowInc) {
                 uint8_t* yPlane = wView.data()[C2PlanarLayout::PLANE_Y];
                 uint8_t* uPlane = wView.data()[C2PlanarLayout::PLANE_U];
                 uint8_t* vPlane = wView.data()[C2PlanarLayout::PLANE_V];
-
-                const uint32_t halfStride = stride / 2;
-                const uint32_t halfWidth  = (mWidth + 1) / 2;
-
+                std::vector<uint8_t> tmp(mWidth);
                 for (uint32_t y = 0; y < mHeight; ++y) {
-                    uint8_t* line = yPlane + y * stride;
-                    uint8_t temp[4096];
-                    memcpy(temp, line, mWidth);
-
-                    for (uint32_t x = 0; x < stride; ++x) {
-                        uint32_t srcX = (x * (uint64_t)mWidth) / stride;
+                    uint8_t* line = yPlane + y * yRowInc;
+                    memcpy(tmp.data(), line, mWidth);
+                    for (uint32_t x = 0; x < alignW; ++x) {
+                        uint32_t srcX = (x * (uint64_t)mWidth) / alignW;
                         int x0 = srcX;
                         int x1 = std::min(x0 + 1, (int)mWidth - 1);
-                        uint32_t weight = ((x * (uint64_t)mWidth) % stride) * 256 / stride;
-                        line[x] = (uint8_t)(((uint16_t)temp[x0] * (256 - weight) +
-                                           (uint16_t)temp[x1] * weight) >> 8);
+                        uint32_t weight = ((x * (uint64_t)mWidth) % alignW) * 256 / alignW;
+                        line[x] = (uint8_t)(((uint16_t)tmp[x0] * (256 - weight) + (uint16_t)tmp[x1] * weight) >> 8);
+                    }
+                    const uint8_t edge = line[alignW - 1];
+                    for (uint32_t x = alignW; x < yRowInc; ++x) {
+                        line[x] = edge;
                     }
                 }
-
-                for (uint32_t y = 0; y < mHeight / 2; ++y) {
-                    uint8_t* uLine = uPlane + y * halfStride;
-                    uint8_t* vLine = vPlane + y * halfStride;
-                    uint8_t uTemp[2048], vTemp[2048];
-                    memcpy(uTemp, uLine, halfWidth);
-                    memcpy(vTemp, vLine, halfWidth);
-
-                    for (uint32_t x = 0; x < halfStride; ++x) {
-                        uint32_t srcX = (x * (uint64_t)halfWidth) / halfStride;
-                        int x0 = srcX;
-                        int x1 = std::min(x0 + 1, (int)halfWidth - 1);
-                        uint32_t weight = ((x * (uint64_t)halfWidth) % halfStride) * 256 / halfStride;
-
-                        uLine[x] = (uint8_t)(((uint16_t)uTemp[x0] * (256 - weight) +
-                                            (uint16_t)uTemp[x1] * weight) >> 8);
-                        vLine[x] = (uint8_t)(((uint16_t)vTemp[x0] * (256 - weight) +
-                                            (uint16_t)vTemp[x1] * weight) >> 8);
+                const uint32_t halfWidth = (mWidth + 1) / 2;
+                const uint32_t halfAlignW = alignW / 2;
+                if (halfAlignW > halfWidth) {
+                    std::vector<uint8_t> uTmp(halfWidth), vTmp(halfWidth);
+                    for (uint32_t y = 0; y < mHeight / 2; ++y) {
+                        uint8_t* uLine = uPlane + y * uRowInc;
+                        uint8_t* vLine = vPlane + y * vRowInc;
+                        memcpy(uTmp.data(), uLine, halfWidth);
+                        memcpy(vTmp.data(), vLine, halfWidth);
+                        for (uint32_t x = 0; x < halfAlignW; ++x) {
+                            uint32_t srcX = (x * (uint64_t)halfWidth) / halfAlignW;
+                            int x0 = srcX;
+                            int x1 = std::min(x0 + 1, (int)halfWidth - 1);
+                            uint32_t weight = ((x * (uint64_t)halfWidth) % halfAlignW) * 256 / halfAlignW;
+                            uLine[x] = (uint8_t)(((uint16_t)uTmp[x0] * (256 - weight) +
+                                                 (uint16_t)uTmp[x1] * weight) >> 8);
+                            vLine[x] = (uint8_t)(((uint16_t)vTmp[x0] * (256 - weight) +
+                                                 (uint16_t)vTmp[x1] * weight) >> 8);
+                        }
+                        const uint8_t uEdge = uLine[halfAlignW - 1];
+                        const uint8_t vEdge = vLine[halfAlignW - 1];
+                        for (uint32_t x = halfAlignW; x < uRowInc; ++x) {
+                            uLine[x] = uEdge;
+                        }
+                        for (uint32_t x = halfAlignW; x < vRowInc; ++x) {
+                            vLine[x] = vEdge;
+                        }
                     }
                 }
             }
@@ -877,21 +885,29 @@ c2_status_t C2SoftAvcDec::ensureDecoderState(const std::shared_ptr<C2BlockPool> 
         ALOGE("not supposed to be here, invalid decoder context");
         return C2_CORRUPTED;
     }
+    int width = ALIGN128(mWidth);
+    if (mAppName == "com.oray.sunlogin") {
+        if (mEglPlatform == "mesa") {
+            width = mWidth;
+        } else if (mEglPlatform == "FTG340") {
+            width = ALIGN32(mWidth);
+        }
+    }
     if (mOutBlock &&
-            (mOutBlock->width() != ALIGN128(mWidth) || mOutBlock->height() != mHeight)) {
+            (mOutBlock->width() != width || mOutBlock->height() != mHeight)) {
         mOutBlock.reset();
     }
     if (!mOutBlock) {
         uint32_t format = HAL_PIXEL_FORMAT_YV12;
         C2MemoryUsage usage = { C2MemoryUsage::CPU_READ, C2MemoryUsage::CPU_WRITE };
         c2_status_t err =
-            pool->fetchGraphicBlock(ALIGN128(mWidth), mHeight, format, usage, &mOutBlock);
+            pool->fetchGraphicBlock(width, mHeight, format, usage, &mOutBlock);
         if (err != C2_OK) {
             ALOGE("fetchGraphicBlock for Output failed with status %d", err);
             return err;
         }
         ALOGV("provided (%dx%d) required (%dx%d)",
-              mOutBlock->width(), mOutBlock->height(), ALIGN128(mWidth), mHeight);
+              mOutBlock->width(), mOutBlock->height(), width, mHeight);
     }
 
     return C2_OK;
