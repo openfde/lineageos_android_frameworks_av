@@ -441,7 +441,14 @@ status_t Codec2InfoBuilder::buildMediaCodecList(MediaCodecListWriter* writer) {
             { "media_codecs_c2.xml", "media_codecs_performance_c2.xml" });
 
     // parse default XML files
-    parser.parseXmlFilesInSearchDirs();
+    std::string eglType = android::base::GetProperty("ro.hardware.graphics.egl", "none");
+    if (eglType == "proxy") {
+        parser.parseXmlFilesInSearchDirs(
+            { "media_codecs_hybris.xml", "media_codecs_performance.xml", "media_codecs_shaping.xml" },
+            { "/product/etc", "/odm/etc", "/vendor/etc", "/system/etc" });
+    } else {
+        parser.parseXmlFilesInSearchDirs();
+    }
 
     // The mainline modules for media may optionally include some codec shaping information.
     // Based on vendor partition SDK, and the brand/product/device information
