@@ -218,6 +218,7 @@ private:
     std::map<const void *, MemoryBlock> mConversionBuffersInUse;
     bool mIsPowervr = false;
     bool mIsFTG = false;
+    bool mIsNvidia = false;
     EGLDisplay mEglDisplay = EGL_NO_DISPLAY;
     EGLContext mEglContext;
     EGLSurface mEglSurface;
