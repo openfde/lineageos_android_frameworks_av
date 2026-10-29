@@ -1710,6 +1710,12 @@ c2_status_t C2SoftAvcEnc::initEncoder() {
             ALOGV("FTG340 used");
         }
     }
+    if ((!mIsNvidia) && property_get("ro.hardware.gpu.model", property, "default") > 0) {
+        if ((strcmp(property, "nvidia") == 0)) {
+            mIsNvidia = true;
+            ALOGV("Nvidia used");
+        }
+    }
     return C2_OK;
 }
 
@@ -1753,7 +1759,7 @@ c2_status_t C2SoftAvcEnc::releaseEncoder() {
     mCodecCtx = nullptr;
 
     mStarted = false;
-    if ((mIsPowervr || mIsFTG) && (mEglDisplay != EGL_NO_DISPLAY)) {
+    if ((mIsPowervr || mIsFTG || mIsNvidia) && (mEglDisplay != EGL_NO_DISPLAY)) {
         closeEgl();
         if(mShmData){
             delete[] mShmData;
@@ -1767,6 +1773,7 @@ c2_status_t C2SoftAvcEnc::releaseEncoder() {
         }
         mIsPowervr = false;
         mIsFTG = false;
+        mIsNvidia = false;
     }
 
     return C2_OK;
@@ -1829,7 +1836,7 @@ c2_status_t C2SoftAvcEnc::setEncodeArgs(
     int32_t vStride;
     bool useEgl = false;
     if ((mIsPowervr && (layout.type == C2PlanarLayout::TYPE_YUV || layout.type == C2PlanarLayout::TYPE_RGB))
-            || (mIsFTG && layout.type == C2PlanarLayout::TYPE_RGB)) {
+            || ((mIsFTG || mIsNvidia) && layout.type == C2PlanarLayout::TYPE_RGB)) {
         bool isYUV = layout.type == C2PlanarLayout::TYPE_YUV;
         initEgl(input->width(), input->height(), isYUV);
         const C2GraphicBufferInfo * graphicBufferInfo = (input->C2GraphicBufferInfo());
@@ -2265,7 +2272,7 @@ void C2SoftAvcEnc::process(
             // Release input buffer reference
             mBuffers.erase(freed);
             mConversionBuffersInUse.erase(freed);
-            if (mIsPowervr || mIsFTG) {
+            if (mIsPowervr || mIsFTG || mIsNvidia) {
                 if(mYuvData){
                     delete[] (GLubyte *)mYuvData;
                     mYuvData = nullptr;
